@@ -7,7 +7,7 @@ defmodule ExUnit.ClusteredCase.App do
   def start(_type, _args) do
     # We depend on the boot server, so start it if not started yet
     unless Process.whereis(:boot_server) do
-      _ = :erl_boot_server.start_link([{127,0,0,1}])
+      {:ok, _} = :erl_boot_server.start_link([{127,0,0,1}])
       host = '#{Utils.hostname()}'
       {:ok, host_ip} = :inet.getaddr(host, :inet)
       :erl_boot_server.add_slave(host_ip)
