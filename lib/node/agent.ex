@@ -48,7 +48,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     try do
       project_config = Mix.Project.config()
       # Load and persist mix config
-      config = Mix.Config.read_wildcard!(project_config[:config_path])
+      config = Mix.Config.eval!(project_config[:config_path])
       Mix.Config.persist(config)
       # Load test modules so that functions defined in tests can be used
       # This is dirty, but works, so it stays for now
