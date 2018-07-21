@@ -13,7 +13,6 @@ defmodule ExUnit.ClusteredCase.Test.ClusteredCaseTest do
   end
   
   def config_node(_) do
-    IO.inspect "healthy cluster node setup on #{Node.self}"
     Application.put_env(:ex_unit_clustered_case, :name, Node.self)
   end
 end

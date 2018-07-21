@@ -63,7 +63,6 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
           send({manager_name, manager_node}, {Node.self, self(), {:init_failed, err}})
           :init.stop()
       end
-      IO.inspect :erlang.get_module_info(ExUnit.ClusteredCase.Test.ClusterTest)
     rescue
       ex ->
         err = Exception.message(ex) <> "\n" <> Exception.format_stacktrace() 
