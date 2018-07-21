@@ -5,7 +5,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
     [
       app: :ex_unit_clustered_case,
       version: "0.1.0",
-      elixir: "~> 1.6",
+      elixir: "~> 1.7.0-rc.1 or ~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
