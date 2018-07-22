@@ -223,7 +223,12 @@ defmodule ExUnit.ClusteredCase do
         results = unquote(__MODULE__).Cluster.map(cluster, fn ->
           unquote(block)
         end)
-        for {:error, _} = err <- results, do: exit(err)
+        case results do
+          {:error, _} = err ->
+            exit(err)
+          _ ->
+            :ok
+        end
         context
       end
     end
@@ -234,7 +239,12 @@ defmodule ExUnit.ClusteredCase do
         results = unquote(__MODULE__).Cluster.map(cluster, 
           __MODULE__, unquote(callback), [context]
         )
-        for {:error, _} = err <- results, do: throw err
+        case results do
+          {:error, _} = err ->
+            exit(err)
+          _ ->
+            :ok
+        end
         context
       end
     end
@@ -264,12 +274,16 @@ defmodule ExUnit.ClusteredCase do
   defmacro node_setup(var, do: block) do
     quote do
       setup %{cluster: cluster} = context do
-        unquote(__MODULE__).Cluster.each(cluster, fn -> 
+        result = unquote(__MODULE__).Cluster.each(cluster, fn -> 
           case context do
             unquote(var) ->
               unquote(block)
           end
         end)
+        case result do
+          {:error, _} = err ->
+            exit(err)
+        end
         context
       end
     end

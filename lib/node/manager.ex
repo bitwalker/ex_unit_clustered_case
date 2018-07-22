@@ -78,7 +78,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       end
     call(name, {:connect, nodes})
   end
-
+  
   @doc """
   Disconnects a node to other nodes in the given list
   """
@@ -100,8 +100,8 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     opts = to_node_opts(opts)
     
     case register_name(opts.manager_name) do
-      {:error, _} = err ->
-        :proc_lib.init_ack(parent, err)
+      {:error, reason} = err ->
+        :proc_lib.init_ack(parent, reason)
         err
       :ok ->
         # Spawn node
@@ -135,7 +135,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
 
             #{msg}
             """
-            :proc_lib.init_ack(parent, {:error, :init_failed})
+            :proc_lib.init_ack(parent, :init_failed)
           {^agent_node, agent_pid, :node_booted} ->
             # If we booted, send config overrides
             send(agent_pid, {self(), :configure, opts.config})
@@ -150,11 +150,11 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
                 handle_node_initialized(parent, :sys.debug_options([]), port, agent_pid, opts)
             after
               init_timeout ->
-                :proc_lib.init_ack(parent, {:error, :init_timeout})
+                :proc_lib.init_ack(parent, :init_timeout)
             end
         after
           boot_timeout ->
-            :proc_lib.init_ack(parent, {:error, :boot_timeout})
+            :proc_lib.init_ack(parent, :boot_timeout)
         end
     end
   end
@@ -251,7 +251,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
         wait_for_disconnected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
     end
   end
-
+  
   defp spawn_fun(fun, fun_opts, opts) when is_function(fun) do
     collect? = Keyword.get(fun_opts, :collect, true)
     parent = self()

@@ -45,30 +45,26 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     Mix.env(:test)
       
     # Initialize base configuration
-    try do
-      project_config = Mix.Project.config()
-      # Load and persist mix config
-      config = Mix.Config.eval!(project_config[:config_path])
-      Mix.Config.persist(config)
-      # Load test modules so that functions defined in tests can be used
-      # This is dirty, but works, so it stays for now
-      test_paths = project_config[:test_paths] || ["test"]
-      test_pattern = project_config[:test_pattern] || "*_test.exs"
-      matched_test_files = Mix.Utils.extract_files(test_paths, test_pattern)
-      case Kernel.ParallelCompiler.require(matched_test_files, []) do
-        {:ok, _, _} ->
-          :ok
-        {:error, _, _} = err ->
-          IO.inspect err
-          send({manager_name, manager_node}, {Node.self, self(), {:init_failed, err}})
-          :init.stop()
-      end
-    rescue
-      ex ->
-        err = Exception.message(ex) <> "\n" <> Exception.format_stacktrace() 
-        IO.puts(err)
-        send({manager_name, manager_node}, {Node.self, self(), {:init_failed, err}})
-        :init.stop()
+    project_config = Mix.Project.config()
+    # Load and persist mix config
+    {config, _paths} = Mix.Config.eval!(project_config[:config_path])
+    Mix.Config.persist(config)
+    # Load test modules so that functions defined in tests can be used
+    # This is dirty, but works, so it stays for now
+    test_paths = project_config[:test_paths] || ["test"]
+    test_pattern = project_config[:test_pattern] || "*_test.exs"
+    matched_test_files = Mix.Utils.extract_files(test_paths, test_pattern)
+    case Kernel.ParallelCompiler.require(matched_test_files, []) do
+      {:ok, _, _} ->
+        :ok
+      {:error, errors, _warnings} ->
+        msg =
+          errors
+          |> Enum.map(fn {file, line, m} -> "#{file}:#{line}: #{m}" end)
+          |> Enum.join("\n")
+        msg = "Failed to compile test files:\n" <> msg
+        send({manager_name, manager_node}, {Node.self, self(), {:init_failed, msg}})
+        :erlang.halt()
     end
 
     # Notify master we're booted
@@ -77,12 +73,17 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     # Enter main loop
     loop(manager_name, manager_node)
   rescue
-    err ->
-      IO.puts Exception.message(err)
-      :erlang.halt()
+    ex ->
+      msg = Exception.message(ex) <> "\n" <>
+        Exception.format_stacktrace(System.stacktrace())
+      manager_name = Manager.name_of(Node.self)
+      send({manager_name, manager_node}, {Node.self, self(), {:init_failed, msg}})
   catch
     kind, payload ->
-      IO.puts Exception.format(kind, payload)
+      msg = Exception.format(kind, payload, System.stacktrace())
+      manager_name = Manager.name_of(Node.self)
+      send({manager_name, manager_node}, {Node.self, self(), {:init_failed, msg}})
+  after
       :erlang.halt()
   end
   

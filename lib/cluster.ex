@@ -139,6 +139,9 @@ defmodule ExUnit.ClusteredCase.Cluster do
     else
       sync_run_all(nodes, funs, collect?)
     end
+  catch
+    :throw, err ->
+      err
   end
   
   defp valid_callback?({m,f,a}) when is_atom(m) and is_atom(f) and is_list(a), do: true
@@ -189,7 +192,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
 
     if Enum.any?(results, &startup_failed?/1) do
       terminate_started(results)
-      {:stop, {:error, {:cluster_start, failed_nodes(results)}}}
+      {:stop, {:cluster_start, failed_nodes(results)}}
     else
       state = to_cluster_state(parent, nodes, opts, results)
       nodelist = nodenames(state)
@@ -265,23 +268,30 @@ defmodule ExUnit.ClusteredCase.Cluster do
   
   defp sync_run_all(nodes, funs, collect?), 
     do: sync_run_all(nodes, funs, collect?, [])
-  defp sync_run_all(_nodes, [], true, acc), do: Enum.reverse(acc)
-  defp sync_run_all(_nodes, [], false, _acc), do: :ok
+  defp sync_run_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
   defp sync_run_all(nodes, [fun | funs], collect?, acc) do
     # Run function on each node sequentially
     if collect? do
-      results = Enum.map(nodes, &ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?))
+      results =
+        nodes
+        |> Enum.map(&ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?))
       sync_run_all(nodes, funs, [results | acc])
     else
-      Enum.each(nodes, &ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?))
+      for n <- nodes do
+        case ExUnit.ClusteredCase.Node.run(n, fun, collect: collect?) do
+          {:error, reason} ->
+            throw reason
+          _ ->
+            :ok
+        end
+      end
       sync_run_all(nodes, funs, :ok)
     end
   end
   
   defp async_run_all(nodes, funs, collect?),
     do: async_run_all(nodes, funs, collect?, [])
-  defp async_run_all(_nodes, [], true, acc), do: Enum.reverse(acc)
-  defp async_run_all(_nodes, [], false, _acc), do: :ok
+  defp async_run_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
   defp async_run_all(nodes, [fun | funs], collect?, acc) do
     # Invoke function on all nodes
     results =
@@ -289,21 +299,19 @@ defmodule ExUnit.ClusteredCase.Cluster do
       |> Enum.map(&Task.async(fn -> ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?) end))
       |> await_all(collect: collect?)
     # Move on to next function
-    if collect? do
-      async_run_all(nodes, funs, collect?, [results | acc])
-    else
-      async_run_all(nodes, funs, collect?, :ok)
-    end
+    async_run_all(nodes, funs, collect?, [results | acc])
   end
   
   defp await_all(tasks, opts), 
     do: await_all(tasks, Keyword.get(opts, :collect, true), [])
   defp await_all([], true, acc), do: Enum.reverse(acc)
-  defp await_all([], false, _acc), do: :ok
+  defp await_all([], false, acc), do: acc
   defp await_all([t | tasks] = retry_tasks, collect?, acc) do
     case Task.yield(t) do
       {:ok, result} when collect? ->
         await_all(tasks, collect?, [result | acc])
+      {:ok, {:error, reason}} ->
+        throw reason
       {:ok, _} ->
         await_all(tasks, collect?, :ok)
       nil ->
