@@ -79,6 +79,21 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     call(name, {:connect, nodes})
   end
 
+  @doc """
+  Disconnects a node to other nodes in the given list
+  """
+  def disconnect(name, nodes) when is_list(nodes) do
+    nodes =
+      for n <- nodes do
+        if is_pid(n) do
+          name(n)
+        else
+          Utils.nodename(n)
+        end
+      end
+    call(name, {:disconnect, nodes})
+  end
+
   @doc false
   def init(parent, opts) do
     Process.flag(:trap_exit, true)
@@ -198,6 +213,9 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       {from, {:connect, nodes}} ->
         send(agent_pid, {self(), :connect, nodes})
         wait_for_connected(parent, debug, port, agent_pid, opts, from, nodes)
+      {from, {:disconnect, nodes}} ->
+        send(agent_pid, {self(), :disconnect, nodes})
+        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, nodes)
       {from, :terminate} ->
         result = terminate_node(port, agent_pid, opts)
         send(from, {self(), result})
@@ -219,6 +237,21 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     end
   end
   
+  defp wait_for_disconnected(parent, debug, port, agent_pid, opts, from, []) do
+    send(from, {self(), :ok})
+    loop(parent, debug, port, agent_pid, opts)
+  end
+  defp wait_for_disconnected(parent, debug, port, agent_pid, opts, from, nodes) do
+    receive do
+      {:EXIT, ^parent, reason} ->
+        exit(reason)
+      {_, ^agent_pid, {:disconnected, n}} ->
+        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+      {_, ^agent_pid, {:disconnect_failed, n, _reason}} ->
+        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+    end
+  end
+
   defp spawn_fun(fun, fun_opts, opts) when is_function(fun) do
     collect? = Keyword.get(fun_opts, :collect, true)
     parent = self()

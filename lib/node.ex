@@ -70,6 +70,10 @@ defmodule ExUnit.ClusteredCase.Node do
   @doc false
   @spec connect(pid | String.t | atom, [pid | String.t | atom]) :: :ok
   defdelegate connect(name, nodes), to: __MODULE__.Manager
+
+  @doc false
+  @spec disconnect(pid | String.t | atom, [pid | String.t | atom]) :: :ok
+  defdelegate disconnect(name, nodes), to: __MODULE__.Manager
   
   @doc false
   @spec stop(String.t | atom) :: :ok
