@@ -77,6 +77,20 @@ defmodule ExUnit.ClusteredCase.Cluster do
   - As a list of lists, where each sub-list contains the nodes in that partition
   
   If your partitioning specification cannot be complied with, an error is returned
+  
+  ## Examples
+
+      test "partition by number of partitions", %{cluster: c} do
+         Cluster.partition(c, 2)
+      end
+
+      test "partition by number of nodes per partition", %{cluster: c} do
+         Cluster.partition(c, [2, 2])
+      end
+
+      test "partition by list of nodes in each partition", %{cluster: c} do
+         Cluster.partition(c, [[:a, :b], [:c, :d]])
+      end
   """
   @spec partition(pid, Partition.opts) :: :ok | {:error, term}
   def partition(pid, n) when is_list(n) do

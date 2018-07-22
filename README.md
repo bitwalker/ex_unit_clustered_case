@@ -41,16 +41,21 @@ defmodule KVStore.ClusteredTests do
     end
   end
 
-  scenario "given a partitioned cluster", [cluster_size: 2, partitions: 2] do
+  scenario "given a partitioned cluster", [cluster_size: 2] do
     node_setup [:start_apps, :seed_kvstore]
 
-    test "writes are not replicated during a partition", %{cluster: c} do
+    test "writes are not replicated during a partition, but are when healed", %{cluster: c} do
       [a, b] = Cluster.members(c)
       assert [0, 0] = Cluster.map(c, KVStore, :get, [:counter])
+      # Partitions can be specified as a number of partitions, list of node
+      # counts, or list of node memberships
+      assert :ok = Cluster.partition(c, [[a], [b]])
       assert :ok = Cluster.call(a, KVStore, :increment, [:counter])
       assert {:ok, 1} = Cluster.call(a, KVStore, :get, [:counter])
+      assert [1, 0] = Cluster.map(c, KVStore, :get, [:counter])
+      assert :ok = Cluster.heal(c)
       # You can use anonymous functions as well
-      assert {:ok, 0} = Cluster.call(a, fn -> KVStore.get(:counter) end)
+      assert [1, 1] = Cluster.map(c, fn -> KVStore.get(:counter) end)
     end
   end
 
