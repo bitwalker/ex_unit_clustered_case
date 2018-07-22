@@ -7,12 +7,14 @@ defmodule ExUnit.ClusteredCase.Cluster do
   
   alias ExUnit.ClusteredCaseError
   alias ExUnit.ClusteredCase.Utils
+  alias __MODULE__.{Partition, PartitionChange}
   
   @type node_spec :: ExUnit.ClusteredCase.Node.node_opts
   @type callback :: {module, atom, [term]} | (() -> term)
   @type cluster_opts :: [cluster_opt]
   @type cluster_opt :: {:nodes, [node_spec]}
                      | {:cluster_size, pos_integer}
+                     | {:partitions, pos_integer | [pos_integer] | [[atom]]}
                      | {:env, [{String.t, String.t}]}
                      | {:erl_flags, [String.t]}
                      | {:config, Keyword.t}
@@ -23,6 +25,8 @@ defmodule ExUnit.ClusteredCase.Cluster do
   defstruct [:parent,
              :pids,
              :nodes, 
+             :partitions,
+             :partition_spec,
              :cluster_size,
              :env,
              :erl_flags,
@@ -55,6 +59,63 @@ defmodule ExUnit.ClusteredCase.Cluster do
   @spec random_member(pid) :: node
   def random_member(pid) do
     Enum.random(members(pid))
+  end
+  
+  @doc """
+  Retrieve the partitions this cluster is composed of
+  """
+  @spec partitions(pid) :: [[node]]
+  def partitions(pid), do: GenServer.call(pid, :partitions, :infinity)
+  
+  @doc """
+  Partition the cluster based on the provided specification.
+
+  You can specify partitions in one of the following ways:
+
+  - As an integer representing the number of partitions
+  - As a list of integers representing the number of nodes in each partition
+  - As a list of lists, where each sub-list contains the nodes in that partition
+  
+  If your partitioning specification cannot be complied with, an error is returned
+  """
+  @spec partition(pid, Partition.opts) :: :ok | {:error, term}
+  def partition(pid, n) when is_list(n) do
+    cond do
+      Enum.all?(n, fn i -> is_integer(i) and i > 0 end) ->
+        do_partition(pid, n)
+      Enum.all?(n, fn p -> is_list(p) and Enum.all?(p, fn x -> is_binary(x) or is_atom(x) end) end) ->
+        do_partition(pid, n)
+      :else ->
+        {:error, :invalid_partition_spec}
+    end
+  end
+  def partition(pid, n) when is_integer(n) and n > 0 do
+    do_partition(pid, n)
+  end
+  
+  defp do_partition(pid, spec) do
+    GenServer.call(pid, {:partition, spec}, :infinity)
+  end
+  
+  @doc """
+  Repartitions the cluster based on the provided specification.
+
+  See `partition/2` for specification details.
+  
+  Repartitioning performs the minimal set of changes required to
+  converge on the partitioning scheme in an attempt to minimize the 
+  amount of churn. That said, some churn is expected, so bear that in
+  mind when writing tests with partitioning events involved.
+  """
+  @spec repartition(pid, Partition.opts) :: :ok | {:error, term}
+  def repartition(pid, n), do: partition(pid, n)
+  
+  @doc """
+  Heals all partitions in the cluster.
+  """
+  @spec heal(pid) :: :ok
+  def heal(pid) do
+    GenServer.call(pid, :heal, :infinity)
   end
   
   @doc """
@@ -195,19 +256,46 @@ defmodule ExUnit.ClusteredCase.Cluster do
       {:stop, {:cluster_start, failed_nodes(results)}}
     else
       state = to_cluster_state(parent, nodes, opts, results)
-      nodelist = nodenames(state)
-      Enum.each(nodelist, &ExUnit.ClusteredCase.Node.connect(&1, nodelist -- [&1]))
-      {:ok, state}
+      case state.partition_spec do
+        {:error, _} = err ->
+          {:stop, err}
+        partition_spec ->
+          change = Partition.partition(nodenames(state), nil, partition_spec)
+          PartitionChange.execute!(change)
+          {:ok, %{state | :partitions => change.partitions}}
+      end
     end
   end
+  
+  defp partition_cluster(%{partition_spec: spec} = state, new_spec) do
+    change = Partition.partition(nodenames(state), spec, new_spec)
+    PartitionChange.execute!(change)
+    %{state | :partitions => change.partitions, :partition_spec => new_spec}
+  end
+
+  defp heal_cluster(state) do
+    nodes = nodenames(state)
+    Enum.each(nodes, &ExUnit.ClusteredCase.Node.connect(&1, nodes -- [&1]))
+    %{state | :partitions => nil, :partition_spec => nil}
+  end
  
+  def handle_call(:partitions, _from, %{partitions: partitions} = state) do
+    {:reply, partitions || [nodenames(state)], state}
+  end
+  def handle_call({:partition, opts}, _from, state) do
+    spec = Partition.new(nodenames(state), opts)
+    {:reply, :ok, partition_cluster(state, spec)}
+  end
+  def handle_call(:heal, _from, state) do
+    {:reply, :ok, heal_cluster(state)}
+  end
+  def handle_call(:members, _from, state) do
+    {:reply, nodenames(state), state}
+  end
   def handle_call(:terminate, from, state) do
     Enum.each(nodepids(state), &ExUnit.ClusteredCase.Node.stop/1)
     GenServer.reply(from, :ok)
     {:stop, :shutdown, state}
-  end
-  def handle_call(:members, _from, state) do
-    {:reply, nodenames(state), state}
   end
   
   def handle_info({:EXIT, parent, reason}, %{parent: parent} = state) do
@@ -324,11 +412,14 @@ defmodule ExUnit.ClusteredCase.Cluster do
       for {name, {:ok, pid}} <- results, into: %{} do
         {name, pid}
       end
+    
+    nodelist = for {name, _} <- results, do: name
 
     %__MODULE__{
       parent: parent,
       pids: pidmap,
       nodes: nodes,
+      partition_spec: Partition.new(nodelist, Keyword.get(opts, :partitions)),
       cluster_size: Keyword.get(opts, :cluster_size),
       env: Keyword.get(opts, :env),
       erl_flags: Keyword.get(opts, :erl_flags),
