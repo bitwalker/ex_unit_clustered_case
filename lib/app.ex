@@ -9,6 +9,7 @@ defmodule ExUnit.ClusteredCase.App do
     end
     
     children = [
+      {ExUnit.ClusteredCase.Node.Ports, []},
       {ExUnit.ClusteredCase.Cluster.Supervisor, []}
     ]
     Supervisor.start_link(children, strategy: :one_for_one)

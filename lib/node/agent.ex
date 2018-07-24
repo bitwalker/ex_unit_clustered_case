@@ -91,8 +91,12 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     receive do
       {:nodedown, ^manager_node} ->
         :erlang.halt()
-      :terminate ->
-        :erlang.halt()
+      {:terminate, opts} ->
+        if Keyword.get(opts, :brutal, false) do
+          :erlang.halt()
+        else
+          :init.stop()
+        end
       {:EXIT, _, :normal} ->
         :ok
       {from, :configure, config} ->

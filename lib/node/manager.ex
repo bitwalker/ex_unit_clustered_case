@@ -5,17 +5,21 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   alias ExUnit.ClusteredCaseError
   alias ExUnit.ClusteredCase.Utils
   alias ExUnit.ClusteredCase.Node.Agent, as: NodeAgent
+  alias ExUnit.ClusteredCase.Node.Ports
 
   defstruct [:name,
              :cookie,
              :manager_name,
              :agent_name,
+             :heart,
              :boot_timeout,
              :init_timeout,
              :post_start_functions,
              :erl_flags,
              :env,
-             :config]
+             :config,
+             :port,
+             :alive?]
   
   @doc """
   Converts a given node name into the name of the associated manager process
@@ -41,27 +45,42 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   @doc """
   Instructs the manager to terminate the given node
   """
-  def stop(name), do: call(name, :terminate)
+  def stop(name), do: server_call(name, :stop)
+  
+  @doc """
+  Instructs the manager to terminate the given node brutally.
+  """
+  def kill(name), do: server_call(name, :kill)
   
   @doc """
   Returns the name of the node managed by the given process
   """
-  def name(name) when is_pid(name), do: call(name, :get_name)
+  def name(name) when is_pid(name), do: server_call(name, :get_name)
+  
+  @doc """
+  Determines if the given node is alive or dead
+  """
+  def alive?(name) do 
+    server_call(name, :is_alive)
+  rescue
+    ArgumentError ->
+      false
+  end
   
   @doc """
   Runs the given function on a node by spawning a process remotely with it
   """
-  def run(name, fun, opts \\ [])
-  def run(name, fun, opts) when is_function(fun) do
-    call(name, {:spawn_fun, fun, opts})
+  def call(name, fun, opts \\ [])
+  def call(name, fun, opts) when is_function(fun) do
+    server_call(name, {:spawn_fun, fun, opts})
   end
-  def run(name, {m, f, a}, opts), do: run(name, m, f, a, opts)
+  def call(name, {m, f, a}, opts), do: call(name, m, f, a, opts)
   
   @doc """
   Applies the given module/function/args on the given node and returns the result
   """
-  def run(name, m, f, a, opts \\ []) when is_atom(m) and is_atom(f) and is_list(a) do
-    call(name, {:apply, m, f, a, opts})
+  def call(name, m, f, a, opts \\ []) when is_atom(m) and is_atom(f) and is_list(a) do
+    server_call(name, {:apply, m, f, a, opts})
   end
   
   @doc """
@@ -76,7 +95,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
           Utils.nodename(n)
         end
       end
-    call(name, {:connect, nodes})
+    server_call(name, {:connect, nodes})
   end
   
   @doc """
@@ -91,9 +110,9 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
           Utils.nodename(n)
         end
       end
-    call(name, {:disconnect, nodes})
+    server_call(name, {:disconnect, nodes})
   end
-
+  
   @doc false
   def init(parent, opts) do
     Process.flag(:trap_exit, true)
@@ -105,56 +124,16 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
         err
       :ok ->
         # Spawn node
-        manager = self()
-        pid = spawn_link(fn -> open_port(manager, opts) end)
-        port =
-          receive do
-            {:EXIT, ^parent, reason} ->
-              exit(reason)
-            {^pid, port} ->
-              port
-          end
-        # Wait for node to come up
-        agent_node = opts.name
-        boot_timeout = opts.boot_timeout
-        init_timeout = opts.init_timeout
-        receive do
-          # If our parent dies, just exit
-          {:EXIT, ^parent, reason} ->
-            exit(reason)
-          # Wait until :node_booted, fails to boot, or we reach boot_timeout
-          {^agent_node, _agent_pid, {:init_failed, err}} ->
-            msg =
-              if is_binary(err) do
-                err
-              else
-                "#{inspect err}"
-              end
-            Logger.error """
-            Failed to boot node #{inspect agent_node}! More detail below:
-
-            #{msg}
-            """
-            :proc_lib.init_ack(parent, :init_failed)
-          {^agent_node, agent_pid, :node_booted} ->
-            # If we booted, send config overrides
-            send(agent_pid, {self(), :configure, opts.config})
-            # Wait for acknowledgement, or until we reach init_timeout
-            receive do
-              {:EXIT, ^parent, reason} ->
-                exit(reason)
-              {^agent_node, ^agent_pid, :node_configured} ->
-                # At this point the node is ready for use
-                :proc_lib.init_ack(parent, {:ok, self()})
-                # Start management loop
-                handle_node_initialized(parent, :sys.debug_options([]), port, agent_pid, opts)
-            after
-              init_timeout ->
-                :proc_lib.init_ack(parent, :init_timeout)
-            end
-        after
-          boot_timeout ->
-            :proc_lib.init_ack(parent, :boot_timeout)
+        with {:ok, port} <- Ports.open_link(opts),
+             opts = %{opts | port: port, alive?: true},
+             debug = :sys.debug_options([]),
+             {:ok, agent_pid} <- init_node(parent, opts),
+             :ok <- configure_node(parent, agent_pid, opts) do
+          :proc_lib.init_ack(parent, {:ok, self()})
+          handle_node_initialized(parent, debug, agent_pid, opts)
+        else
+          {:error, reason} ->
+            :proc_lib.init_ack(parent, reason)
         end
     end
   end
@@ -169,14 +148,62 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     end
   end
   
-  defp handle_node_initialized(parent, debug, port, agent_pid, opts) do
+  defp init_node(parent, %{port: port, name: agent_node} = opts) do
+    boot_timeout = opts.boot_timeout
+    receive do
+      # If our parent dies, just exit
+      {:EXIT, ^parent, reason} ->
+        exit(reason)
+      # If the port dies, just exit
+      {:EXIT, ^port, reason} ->
+        exit(reason)
+      {^agent_node, _agent_pid, {:init_failed, err}} ->
+        msg =
+          if is_binary(err) do
+            err
+          else
+            "#{inspect err}"
+          end
+        Logger.error """
+        Failed to boot node #{inspect agent_node}! More detail below:
+
+        #{msg}
+        """
+        {:error, {:init_failed, err}}
+      {^agent_node, agent_pid, :node_booted} ->
+        # If we booted, send config overrides
+        send(agent_pid, {self(), :configure, opts.config})
+        {:ok, agent_pid}
+    after
+      boot_timeout ->
+        {:error, :boot_timeout}
+    end
+  end
+  
+  defp configure_node(parent, agent_pid, %{port: port, name: agent_node} = opts) do
+    init_timeout = opts.init_timeout
+    receive do
+      {:EXIT, ^parent, reason} ->
+        exit(reason)
+      {:EXIT, ^port, reason} ->
+        exit(reason)
+      {^agent_node, ^agent_pid, :node_configured} ->
+        # At this point the node is ready for use
+        :ok
+    after
+      init_timeout ->
+        {:error, :init_timeout}
+    end
+  end
+  
+  defp handle_node_initialized(parent, debug, agent_pid, opts) do
     # If we are running coverage, make sure the managed node is included
     if Process.whereis(:cover_server) do
       cover_main_node = :cover.get_main_node()
       :rpc.call(cover_main_node, :cover, :start, [opts.name])
     end
     # Start monitoring the node
-    Node.monitor(opts.name, true)
+    :net_kernel.monitor_nodes(true, [node_type: :all])
     # Invoke all of the post-start functions
     for fun <- opts.post_start_functions do
       case fun do
@@ -187,68 +214,100 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       end
     end
     # Enter main loop
-    loop(parent, debug, port, agent_pid, opts)
+    loop(parent, debug, agent_pid, opts)
   end
   
-  defp loop(parent, debug, port, agent_pid, opts) do
-    agent_node = opts.name
+  defp loop(parent, debug, agent_pid, %{port: port, name: agent_node} = opts) do
+    heart? = opts.heart
+    alive? = opts.alive?
     receive do
       {:system, from, req} ->
-        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, {port, agent_pid, opts})
+        :sys.handle_system_msg(req, from, parent, __MODULE__, debug, {agent_pid, opts})
       {:EXIT, ^parent, reason} ->
         exit(reason)
-      {:nodedown, ^agent_node} ->
+      {:EXIT, ^port, reason} ->
+        exit(reason)
+      {:nodedown, ^agent_node, _} when heart? ->
+        # ignore..
+        loop(parent, debug, agent_pid, %{opts | alive?: false})
+      {:nodedown, ^agent_node, _} ->
         exit(:nodedown)
+      {:nodeup, ^agent_node, _} when heart? ->
+        with {:ok, agent_pid} <- init_node(parent, opts),
+             :ok <- configure_node(parent, agent_pid, opts) do
+          handle_node_initialized(parent, debug, agent_pid, %{opts | alive?: true})
+        else
+          {:error, reason} ->
+            exit(reason)
+        end
+      {:nodedown, _, _} ->
+        loop(parent, debug, agent_pid, opts)
+      {:nodeup, _, _} ->
+        loop(parent, debug, agent_pid, opts)
+      {from, :is_alive} ->
+        send(from, {self(), alive?})
+        loop(parent, debug, agent_pid, opts)
       {from, :get_name} ->
         send(from, {self(), opts.name})
-        loop(parent, debug, port, agent_pid, opts)
-      {from, {:spawn_fun, fun, fun_opts}} ->
+        loop(parent, debug, agent_pid, opts)
+      {from, {:spawn_fun, fun, fun_opts}} when alive? ->
         result = spawn_fun(fun, fun_opts, opts)
         send(from, {self(), result})
-        loop(parent, debug, port, agent_pid, opts)
-      {from, {:apply, m, f, a, mfa_opts}} ->
+        loop(parent, debug, agent_pid, opts)
+      {from, {:apply, m, f, a, mfa_opts}} when alive? ->
         result = apply_fun(m, f, a, mfa_opts, opts)
         send(from, {self(), result})
-        loop(parent, debug, port, agent_pid, opts)
-      {from, {:connect, nodes}} ->
+        loop(parent, debug, agent_pid, opts)
+      {from, {:connect, nodes}} when alive? ->
         send(agent_pid, {self(), :connect, nodes})
-        wait_for_connected(parent, debug, port, agent_pid, opts, from, nodes)
-      {from, {:disconnect, nodes}} ->
+        wait_for_connected(parent, debug, agent_pid, opts, from, nodes)
+      {from, {:disconnect, nodes}} when alive? ->
         send(agent_pid, {self(), :disconnect, nodes})
-        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, nodes)
-      {from, :terminate} ->
-        result = terminate_node(port, agent_pid, opts)
+        wait_for_disconnected(parent, debug, agent_pid, opts, from, nodes)
+      {from, stop} when stop in [:stop, :kill] ->
+        result = terminate_node(agent_pid, opts, brutal: stop == :kill)
         send(from, {self(), result})
+        if heart? do
+          loop(parent, debug, agent_pid, %{opts | :alive? => false})
+        else
+          :ok
+        end
+      {from, _msg} when not alive? ->
+        send(from, {self(), {:error, :nodedown}})
+        loop(parent, debug, agent_pid, opts)
+      msg ->
+        Logger.warn "Unexpected message in #{__MODULE__}: #{inspect msg}"
+        loop(parent, debug, agent_pid, opts)
     end
   end
   
-  defp wait_for_connected(parent, debug, port, agent_pid, opts, from, []) do
+  defp wait_for_connected(parent, debug, agent_pid, opts, from, []) do
     send(from, {self(), :ok})
-    loop(parent, debug, port, agent_pid, opts)
+    loop(parent, debug, agent_pid, opts)
   end
-  defp wait_for_connected(parent, debug, port, agent_pid, opts, from, nodes) do
+  defp wait_for_connected(parent, debug, agent_pid, opts, from, nodes) do
     receive do
       {:EXIT, ^parent, reason} ->
         exit(reason)
       {_, ^agent_pid, {:connected, n}} ->
-        wait_for_connected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+        wait_for_connected(parent, debug, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
       {_, ^agent_pid, {:connect_failed, n, _reason}} ->
-        wait_for_connected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+        wait_for_connected(parent, debug, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
     end
   end
   
-  defp wait_for_disconnected(parent, debug, port, agent_pid, opts, from, []) do
+  defp wait_for_disconnected(parent, debug, agent_pid, opts, from, []) do
     send(from, {self(), :ok})
-    loop(parent, debug, port, agent_pid, opts)
+    loop(parent, debug, agent_pid, opts)
   end
-  defp wait_for_disconnected(parent, debug, port, agent_pid, opts, from, nodes) do
+  defp wait_for_disconnected(parent, debug, agent_pid, opts, from, nodes) do
     receive do
       {:EXIT, ^parent, reason} ->
         exit(reason)
       {_, ^agent_pid, {:disconnected, n}} ->
-        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+        wait_for_disconnected(parent, debug, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
       {_, ^agent_pid, {:disconnect_failed, n, _reason}} ->
-        wait_for_disconnected(parent, debug, port, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
+        wait_for_disconnected(parent, debug, agent_pid, opts, from, Enum.reject(nodes, &(&1 == n)))
     end
   end
   
@@ -310,7 +369,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     end
   end
   
-  defp terminate_node(port, agent_pid, opts) do
+  defp terminate_node(agent_pid, opts, terminate_opts) do
     agent_node = opts.name
     {cover?, main_cover_node} =
       if Process.whereis(:cover_server) do
@@ -320,17 +379,15 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       else
         {false, nil}
       end
-    Node.monitor(agent_node, true)
-    send(agent_pid, :terminate)
+    send(agent_pid, {:terminate, terminate_opts})
     receive do
-      {:nodedown, ^agent_node} ->
+      {:nodedown, ^agent_node, _} ->
         if cover? do
           :rpc.call(main_cover_node, :cover, :stop, [agent_node])
         end
         :ok
     after
       30_000 ->
-        Port.close(port)
         {:error, :shutdown_timeout}
     end
   end
@@ -339,8 +396,8 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   # :sys callbacks
   
   @doc false
-  def system_continue(parent, debug, {port, agent_pid, opts}) do
-    loop(parent, debug, port, agent_pid, opts)
+  def system_continue(parent, debug, {agent_pid, opts}) do
+    loop(parent, debug, agent_pid, opts)
   end
   
   @doc false
@@ -358,8 +415,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   end
   
   @doc false
-  def system_terminate(reason, _parent, _debug, {port, _agent_pid, _opts}) do
-    Port.close(port)
+  def system_terminate(reason, _parent, _debug, {_agent_pid, _opts}) do
     reason
   end
   
@@ -392,12 +448,14 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       cookie: cookie,
       manager_name: name,
       agent_name: NodeAgent.name_of(),
+      heart: Keyword.get(opts, :heart, false),
       boot_timeout: Keyword.get(opts, :boot_timeout, 2_000),
       init_timeout: Keyword.get(opts, :init_timeout, 10_000),
       post_start_functions: Keyword.get(opts, :post_start_functions, []),
       erl_flags: to_port_args(name, cookie, Keyword.get(opts, :erl_flags, [])),
       env: to_port_env(Keyword.get(opts, :env, [])),
-      config: config
+      config: config,
+      alive?: false
     }
   end
   
@@ -438,7 +496,7 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   end
 
   # Standardizes calls to the manager
-  defp call(pid, msg) when is_pid(pid) do
+  defp server_call(pid, msg) when is_pid(pid) do
     ref = Process.monitor(pid)
     send(pid, {self(), msg})
     receive do
@@ -449,31 +507,13 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
         result
     end
   end
-  defp call(name, msg) do
+  defp server_call(name, msg) do
     name = Utils.nodename(name)
     case Process.whereis(name) do
       nil ->
-        raise "no node manager for #{inspect name}"
+        raise ArgumentError, "no node manager for #{inspect name}"
       pid ->
-        call(pid, msg)
-    end
-  end
-  
-  defp open_port(manager, opts) do
-    env = opts.env
-    args = opts.erl_flags
-    erl = System.find_executable("erl")
-    port_opts = [:stream | [env: env, args: args]]
-    port = Port.open({:spawn_executable, erl}, port_opts)
-    send(manager, {self(), port})
-    watch_port(port, opts)
-  end
-  
-  defp watch_port(port, %{name: name} = opts) do
-    receive do
-      {^port, {:data, data}} ->
-        IO.puts("#{name}: " <> IO.iodata_to_binary(data))
-        watch_port(port, opts)
+        server_call(pid, msg)
     end
   end
 end

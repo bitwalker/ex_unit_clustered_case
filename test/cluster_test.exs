@@ -14,7 +14,7 @@ defmodule ExUnit.ClusteredCase.Test.ClusterTest do
     
     [name1, name2] = Cluster.members(cluster)
     
-    assert [^name2] = N.run(name1, Node, :list, [])
+    assert [^name2] = N.call(name1, Node, :list, [])
   end
   
   test "can map a function across a cluster" do

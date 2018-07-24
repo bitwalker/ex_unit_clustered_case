@@ -65,6 +65,7 @@ defmodule ExUnit.ClusteredCase.Node do
   end
   
   @doc false
+  @spec name(pid | String.t | atom) :: node
   defdelegate name(pid), to: __MODULE__.Manager
   
   @doc false
@@ -76,22 +77,30 @@ defmodule ExUnit.ClusteredCase.Node do
   defdelegate disconnect(name, nodes), to: __MODULE__.Manager
   
   @doc false
-  @spec stop(String.t | atom) :: :ok
+  @spec stop(pid | String.t | atom) :: :ok
   defdelegate stop(name), to: __MODULE__.Manager
   
   @doc false
-  @spec run(pid | String.t | atom, fun) :: {:ok, term} | {:error, term}
-  defdelegate run(name, fun), to: __MODULE__.Manager
+  @spec kill(pid | String.t | atom) :: :ok
+  defdelegate kill(name), to: __MODULE__.Manager
+  
+  @doc false
+  @spec alive?(pid | String.t | atom) :: boolean
+  defdelegate alive?(name), to: __MODULE__.Manager
+  
+  @doc false
+  @spec call(pid | String.t | atom, fun) :: {:ok, term} | {:error, term}
+  defdelegate call(name, fun), to: __MODULE__.Manager
 
   @doc false
-  @spec run(pid | String.t | atom, fun, Keyword.t) :: {:ok, term} | {:error, term}
-  defdelegate run(name, fun, opts), to: __MODULE__.Manager
+  @spec call(pid | String.t | atom, fun, Keyword.t) :: {:ok, term} | {:error, term}
+  defdelegate call(name, fun, opts), to: __MODULE__.Manager
 
   @doc false
-  @spec run(pid | String.t | atom, module, atom, [term]) :: {:ok, term} | {:error, term}
-  defdelegate run(name, m, f, a), to: __MODULE__.Manager
+  @spec call(pid | String.t | atom, module, atom, [term]) :: {:ok, term} | {:error, term}
+  defdelegate call(name, m, f, a), to: __MODULE__.Manager
 
   @doc false
-  @spec run(pid | String.t | atom, module, atom, [term], Keyword.t) :: {:ok, term} | {:error, term}
-  defdelegate run(name, m, f, a, opts), to: __MODULE__.Manager
+  @spec call(pid | String.t | atom, module, atom, [term], Keyword.t) :: {:ok, term} | {:error, term}
+  defdelegate call(name, m, f, a, opts), to: __MODULE__.Manager
 end

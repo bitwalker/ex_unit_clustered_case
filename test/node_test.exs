@@ -17,14 +17,14 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     config = [ex_unit_clustered_case: [overriden_by: self()]]
     assert {:ok, pid} = N.start(config: config)
     me = self()
-    assert ^me = N.run(pid, Application, :get_env, [:ex_unit_clustered_case, :overriden_by])
+    assert ^me = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :overriden_by])
   end
   
   test "env vars are applied as expected" do
     env = [{"SOME_VAR", "#{inspect self()}"}]
     assert {:ok, pid} = N.start(env: env)
     expected = "#{inspect self()}"
-    assert ^expected = N.run(pid, Application, :get_env, [:ex_unit_clustered_case, :env_var])
+    assert ^expected = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :env_var])
   end
   
   test "can connect nodes to form a cluster" do
@@ -35,7 +35,19 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     name2 = N.name(pid2)
     
     assert :ok = N.connect(name1, [name2])
-    assert [^name2] = N.run(name1, Node, :list, [])
-    assert [^name1] = N.run(name2, Node, :list, [])
+    assert [^name2] = N.call(name1, Node, :list, [])
+    assert [^name1] = N.call(name2, Node, :list, [])
+  end
+  
+  test "can restart a node with heart mode" do
+    assert {:ok, pid} = N.start([heart: true])
+    name = N.name(pid)
+    assert N.alive?(pid)
+    assert :ok = N.kill(pid)
+    refute N.alive?(pid)
+    refute name in Node.list([:connected])
+    :timer.sleep(1_000)
+    assert N.alive?(pid)
+    assert name in Node.list([:connected])
   end
 end

@@ -136,13 +136,13 @@ defmodule ExUnit.ClusteredCase.Cluster do
   Invoke a function on a specific member of the cluster
   """
   @spec call(node, callback) :: term | {:error, term}
-  defdelegate call(node, callback), to: ExUnit.ClusteredCase.Node, as: :run
+  defdelegate call(node, callback), to: ExUnit.ClusteredCase.Node
   
   @doc """
   Invoke a function on a specific member of the cluster
   """
   @spec call(node, module, atom, [term]) :: term | {:error, term}
-  defdelegate call(node, m, f, a), to: ExUnit.ClusteredCase.Node, as: :run
+  defdelegate call(node, m, f, a), to: ExUnit.ClusteredCase.Node
   
   @doc """
   Applies a function on all nodes in the cluster.
@@ -161,7 +161,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
   end
 
   defp do_each(pid, callback) do
-    run(pid, callback, collect: false)
+    do_call(pid, callback, collect: false)
   end
   
   @doc """
@@ -185,34 +185,33 @@ defmodule ExUnit.ClusteredCase.Cluster do
   end
   
   defp do_map(pid, callback) do
-    [results] = run(pid, callback)
+    [results] = do_call(pid, callback)
     results
   end
   
   # Function for running functions against nodes in the cluster
   # Provides options for tweaking the behavior of such calls
-  defp run(pid, fun, opts \\ [])
-  defp run(pid, {m, f, a} = mfa, opts) when is_atom(m) and is_atom(f) and is_list(a) do
-    do_run(pid, [mfa], opts)
+  defp do_call(pid, fun, opts \\ [])
+  defp do_call(pid, {m, f, a} = mfa, opts) when is_atom(m) and is_atom(f) and is_list(a) do
+    do_call(pid, [mfa], opts)
   end
-  defp run(pid, fun, opts) when is_function(fun, 0) do
-    do_run(pid, [fun], opts)
+  defp do_call(pid, fun, opts) when is_function(fun, 0) do
+    do_call(pid, [fun], opts)
   end
-  defp run(pid, funs, opts) when is_list(funs) do
+  defp do_call(pid, funs, opts) when is_list(funs) do
     unless Enum.all?(funs, &valid_callback?/1) do
       raise ArgumentError, "expected list of valid callback functions, got: #{inspect funs}"
     end
-    do_run(pid, funs, opts)
+    do_call(pid, funs, opts)
   end
-
-  defp do_run(pid, funs, opts) when is_list(funs) do
+  defp do_call(pid, funs, opts) when is_list(funs) do
     nodes = members(pid)
     parallel? = Keyword.get(opts, :parallel, true)
     collect? = Keyword.get(opts, :collect, true)
     if parallel? do
-      async_run_all(nodes, funs, collect?)
+      async_call_all(nodes, funs, collect?)
     else
-      sync_run_all(nodes, funs, collect?)
+      sync_call_all(nodes, funs, collect?)
     end
   catch
     :throw, err ->
@@ -368,40 +367,40 @@ defmodule ExUnit.ClusteredCase.Cluster do
     for {_name, pid} <- pids, do: pid
   end
   
-  defp sync_run_all(nodes, funs, collect?), 
-    do: sync_run_all(nodes, funs, collect?, [])
-  defp sync_run_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
-  defp sync_run_all(nodes, [fun | funs], collect?, acc) do
+  defp sync_call_all(nodes, funs, collect?), 
+    do: sync_call_all(nodes, funs, collect?, [])
+  defp sync_call_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
+  defp sync_call_all(nodes, [fun | funs], collect?, acc) do
     # Run function on each node sequentially
     if collect? do
       results =
         nodes
-        |> Enum.map(&ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?))
-      sync_run_all(nodes, funs, [results | acc])
+        |> Enum.map(&ExUnit.ClusteredCase.Node.call(&1, fun, collect: collect?))
+      sync_call_all(nodes, funs, [results | acc])
     else
       for n <- nodes do
-        case ExUnit.ClusteredCase.Node.run(n, fun, collect: collect?) do
+        case ExUnit.ClusteredCase.Node.call(n, fun, collect: collect?) do
           {:error, reason} ->
             throw reason
           _ ->
             :ok
         end
       end
-      sync_run_all(nodes, funs, :ok)
+      sync_call_all(nodes, funs, :ok)
     end
   end
   
-  defp async_run_all(nodes, funs, collect?),
-    do: async_run_all(nodes, funs, collect?, [])
-  defp async_run_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
-  defp async_run_all(nodes, [fun | funs], collect?, acc) do
+  defp async_call_all(nodes, funs, collect?),
+    do: async_call_all(nodes, funs, collect?, [])
+  defp async_call_all(_nodes, [], _collect?, acc), do: Enum.reverse(acc)
+  defp async_call_all(nodes, [fun | funs], collect?, acc) do
     # Invoke function on all nodes
     results =
       nodes
-      |> Enum.map(&Task.async(fn -> ExUnit.ClusteredCase.Node.run(&1, fun, collect: collect?) end))
+      |> Enum.map(&Task.async(fn -> ExUnit.ClusteredCase.Node.call(&1, fun, collect: collect?) end))
       |> await_all(collect: collect?)
     # Move on to next function
-    async_run_all(nodes, funs, collect?, [results | acc])
+    async_call_all(nodes, funs, collect?, [results | acc])
   end
   
   defp await_all(tasks, opts), 
