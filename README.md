@@ -11,8 +11,9 @@ in being unable to define functions in test modules for execution on other nodes
 which is an impractical constraint for testing. This library has to compile test
 modules on each node separately, as they are compiled in-memory by the test compiler,
 and so are unable to be remotely code loaded like modules which are compiled to `.beam`
-files on disk. **The fix for this is currently a PR against Elixir master, #7949, until
-it is merged, you will need to use the `jv-prune-metadata` branch if you wish to test things out.**
+files on disk. **The fix for this is in Elixir master, you will need to build from master
+yourself in order to test with this library currently, hopefully it will be in the next
+stable release**
 
 ## Usage
 
