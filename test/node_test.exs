@@ -47,7 +47,7 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert :ok = N.kill(pid)
     refute N.alive?(pid)
     refute name in Node.list([:connected])
-    :timer.sleep(1_000)
+    :timer.sleep(boot_timeout())
     assert N.alive?(pid)
     assert name in Node.list([:connected])
   end
