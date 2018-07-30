@@ -3,8 +3,10 @@ defmodule ExUnit.ClusteredCase.Support do
 
   def boot_timeout(default \\ 10_000) do
     case System.get_env("BOOT_TIMEOUT") do
+      nil when is_nil(default) ->
+        10_000
       nil ->
-        default || 10_000
+        default
       val ->
         String.to_integer(val)
     end
@@ -18,6 +20,6 @@ defmodule ExUnit.ClusteredCase.Support do
   def start_node(opts \\ []) do
     opts
     |> set_boot_timeout()
-    ExUnit.ClusteredCase.Node.start(opts)
+    |> ExUnit.ClusteredCase.Node.start()
   end
 end
