@@ -1,7 +1,14 @@
 defmodule ExUnit.ClusteredCase.Test.ClusteredCaseTest do
   use ExUnit.ClusteredCase, async: false
 
-  scenario "healthy cluster", cluster_size: 2 do
+  import ExUnit.ClusteredCase.Support
+
+  @opts [
+    boot_timeout: boot_timeout(),
+    cluster_size: 2
+  ]
+
+  scenario "healthy cluster", @opts do
     node_setup(:config_node)
 
     test "nodes greet the world", %{cluster: cluster} do
@@ -14,7 +21,7 @@ defmodule ExUnit.ClusteredCase.Test.ClusteredCaseTest do
     end
   end
 
-  scenario "with an unpartitioned cluster", cluster_size: 2 do
+  scenario "with an unpartitioned cluster", @opts do
     test "can partition and heal the cluster", %{cluster: cluster} do
       [a, b] = Cluster.members(cluster)
       assert [_] = Cluster.partitions(cluster)

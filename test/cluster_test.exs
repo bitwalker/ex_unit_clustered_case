@@ -3,11 +3,16 @@ defmodule ExUnit.ClusteredCase.Test.ClusterTest do
 
   alias ExUnit.ClusteredCase.Cluster
   alias ExUnit.ClusteredCase.Node, as: N
+  import ExUnit.ClusteredCase.Support
 
   test "can successfully start a cluster" do
     test_pid = self()
     pingback = fn -> send(test_pid, {test_pid, :pong}) end
-    opts = [cluster_size: 2, post_start_functions: [pingback]]
+    opts = [
+      boot_timeout: boot_timeout(),
+      cluster_size: 2, 
+      post_start_functions: [pingback]
+    ]
     assert {:ok, cluster} = Cluster.start(opts)
     assert_receive {^test_pid, :pong}, 5_000
     assert_receive {^test_pid, :pong}, 5_000
@@ -18,7 +23,11 @@ defmodule ExUnit.ClusteredCase.Test.ClusterTest do
   end
 
   test "can map a function across a cluster" do
-    assert {:ok, c} = Cluster.start(cluster_size: 2)
+    opts = [
+      boot_timeout: boot_timeout(),
+      cluster_size: 2
+    ]
+    assert {:ok, c} = Cluster.start(opts)
     members = Cluster.members(c)
     assert ^members = Cluster.map(c, fn -> Node.self() end)
   end
