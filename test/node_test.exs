@@ -51,4 +51,23 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert N.alive?(pid)
     assert name in Node.list([:connected])
   end
+
+  test "can capture log" do
+    assert {:ok, pid} = start_node(capture_log: true)
+    N.call(pid, IO, :puts, ["hello from node"])
+    assert {:ok, log} = N.log(pid)
+    assert log =~ "hello from node"
+  end
+
+  test "can redirect log to device" do
+    import ExUnit.CaptureIO
+    # Note, for this test we have to redirect to something other than
+    # :standard_io, since ExUnit.CaptureIO handles that device by changing
+    # the group leader for the current process, but our funs are running
+    # on another node, and output is being written in another process.
+    assert {:ok, pid} = start_node(stdout: :standard_error)
+    assert capture_io(:standard_error, fn ->
+      N.call(pid, IO, :puts, ["hello from node"])
+    end) =~ "hello from node"
+  end
 end

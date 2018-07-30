@@ -91,6 +91,10 @@ defmodule ExUnit.ClusteredCase.Node do
   defdelegate alive?(name), to: __MODULE__.Manager
 
   @doc false
+  @spec log(pid | String.t() | atom) :: {:ok, binary}
+  defdelegate log(name), to: __MODULE__.Manager
+
+  @doc false
   @spec call(pid | String.t() | atom, fun) :: {:ok, term} | {:error, term}
   defdelegate call(name, fun), to: __MODULE__.Manager
 

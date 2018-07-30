@@ -124,6 +124,14 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
       {from, :disconnect, node} when is_atom(node) ->
         disconnect_nodes(from, [node])
+        
+      {from, :spawn_fun, fun, fun_opts} ->
+        reply = spawn_fun(manager_node, fun, fun_opts)
+        send(from, {Node.self(), self(), reply})
+
+      {from, :apply_fun, mfa, fun_opts} ->
+        reply = spawn_fun(manager_node, mfa, fun_opts)
+        send(from, {Node.self(), self(), reply})
 
       msg ->
         IO.puts("unexpected message received by agent: #{inspect(msg)}")
@@ -154,6 +162,82 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         other ->
           send(from, {Node.self(), self(), {:disconnect_failed, n, other}})
       end
+    end
+  end
+  
+  defp spawn_fun(manager_node, fun, opts) when is_function(fun) do
+    collect? = Keyword.get(opts, :collect, true)
+    parent = self()
+    ref = make_ref()
+
+    {_pid, pref} =
+      spawn_monitor(fn ->
+        try do
+          fun.()
+        catch
+          kind, err ->
+            send(parent, {ref, {kind, err}})
+        else
+          result ->
+            if collect? do
+              send(parent, {ref, result})
+            else
+              send(parent, {ref, :ok})
+            end
+        end
+      end)
+
+    receive do
+      {:nodedown, ^manager_node} ->
+        :erlang.halt()
+
+      {:terminate, _opts} ->
+        :erlang.halt()
+
+      {:DOWN, ^pref, _type, _pid, info} ->
+        {:error, info}
+
+      {^ref, result} ->
+        Process.demonitor(pref, [:flush])
+        result
+    end
+  end
+
+  defp spawn_fun(manager_node, {m, f, a}, opts) do
+    collect? = Keyword.get(opts, :collect, true)
+    parent = self()
+    ref = make_ref()
+
+    {_pid, pref} =
+      spawn_monitor(fn ->
+        try do
+          apply(m, f, a)
+        catch
+          kind, err ->
+            send(parent, {ref, {kind, err}})
+        else
+          result ->
+            if collect? do
+              send(parent, {ref, result})
+            else
+              send(parent, {ref, :ok})
+            end
+        end
+      end)
+
+    receive do
+      {:nodedown, ^manager_node} ->
+        :erlang.halt()
+
+      {:terminate, _opts} ->
+        :erlang.halt()
+
+      {:DOWN, ^pref, _type, _pid, info} ->
+        {:error, info}
+
+      {^ref, result} ->
+        Process.demonitor(pref, [:flush])
+        result
     end
   end
 end

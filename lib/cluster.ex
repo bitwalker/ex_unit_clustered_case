@@ -51,6 +51,12 @@ defmodule ExUnit.ClusteredCase.Cluster do
   def stop(pid), do: GenServer.call(pid, :terminate, :infinity)
 
   @doc """
+  Get the captured log for a specific node in the cluster
+  """
+  @spec log(node) :: {:ok, binary}
+  defdelegate log(node), to: ExUnit.ClusteredCase.Node
+
+  @doc """
   Retrieve a list of nodes in the given cluster
   """
   @spec members(pid) :: [node]

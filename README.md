@@ -95,7 +95,29 @@ def deps do
 end
 ```
 
-You can generate the docs with `mix docs` from a local git checkout.
+You can view the docs on [hexdocs.pm](https://hexdocs.pm/ex_unit_clustered_case) or generate the docs 
+with `mix docs` from a local git checkout.
+
+## Capturing Output
+
+By default, output written to stdio/stderr on nodes will be hidden. You can change this behavior for testing
+with the following node options:
+
+- Capture the entire log from a node with `capture: true`
+- Redirect output to a device or process with `stdout: :standard_error | :standard_io | pid`
+- Both capture _and_ redirect by setting both options. 
+
+Default values are `capture: false` and `stdout: false`
+
+When you capture, you can get the captured logs for a specific node with `Cluster.log(node)`. If capturing
+is not enabled, this will simply return `{:ok, ""}`, otherwise it returns `{:ok, binary}`. When you call this
+function, the logs are returned, and the accumulated logs are flushed, resetting the capture state.
+
+**NOTE**: Setting these options occurs when a node is started, and cannot be changed later. Since output is
+gathered in a central location, async tests which are testing against a node's output may stomp on each other,
+either by writing content that conflicts with the other test, or by flushing the captured log when a test is not
+expecting that to happen. If you need to test against log output, be sure to start separate nodes for each test,
+or run your tests with `async: false`.
 
 ## Roadmap
 

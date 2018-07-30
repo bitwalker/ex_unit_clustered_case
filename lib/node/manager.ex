@@ -20,6 +20,8 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
     :env,
     :config,
     :port,
+    :capture_log,
+    :stdout,
     :alive?
   ]
 
@@ -58,6 +60,16 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   Returns the name of the node managed by the given process
   """
   def name(name) when is_pid(name), do: server_call(name, :get_name)
+
+  @doc """
+  Returns the captured log output of the given node.
+
+  If the node was not configured to capture logs, this will be an empty string.
+  """
+  def log(name) do 
+    port = server_call(name, :get_port_pid)
+    Ports.get_captured_log(port)
+  end
 
   @doc """
   Determines if the given node is alive or dead
@@ -284,15 +296,17 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
         send(from, {self(), opts.name})
         loop(parent, debug, agent_pid, opts)
 
-      {from, {:spawn_fun, fun, fun_opts}} when alive? ->
-        result = spawn_fun(fun, fun_opts, opts)
-        send(from, {self(), result})
+      {from, :get_port_pid} ->
+        send(from, {self(), port})
         loop(parent, debug, agent_pid, opts)
 
+      {from, {:spawn_fun, fun, fun_opts}} when alive? ->
+        send(agent_pid, {self(), :spawn_fun, fun, fun_opts})
+        wait_for_fun(parent, debug, agent_pid, opts, from)
+
       {from, {:apply, m, f, a, mfa_opts}} when alive? ->
-        result = apply_fun(m, f, a, mfa_opts, opts)
-        send(from, {self(), result})
-        loop(parent, debug, agent_pid, opts)
+        send(agent_pid, {self(), :apply_fun, {m,f,a}, mfa_opts})
+        wait_for_fun(parent, debug, agent_pid, opts, from)
 
       {from, {:connect, nodes}} when alive? ->
         send(agent_pid, {self(), :connect, nodes})
@@ -318,6 +332,16 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
 
       msg ->
         Logger.warn("Unexpected message in #{__MODULE__}: #{inspect(msg)}")
+        loop(parent, debug, agent_pid, opts)
+    end
+  end
+  
+  defp wait_for_fun(parent, debug, agent_pid, opts, from) do
+    receive do
+      {:EXIT, ^parent, reason} ->
+        exit(reason)
+      {_, ^agent_pid, reply} ->
+        send(from, {self(), reply})
         loop(parent, debug, agent_pid, opts)
     end
   end
@@ -369,74 +393,6 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
           from,
           Enum.reject(nodes, &(&1 == n))
         )
-    end
-  end
-
-  defp spawn_fun(fun, fun_opts, opts) when is_function(fun) do
-    collect? = Keyword.get(fun_opts, :collect, true)
-    parent = self()
-    ref = make_ref()
-
-    pid =
-      Node.spawn(opts.name, fn ->
-        try do
-          fun.()
-        catch
-          kind, err ->
-            send(parent, {ref, {kind, err}})
-        else
-          result ->
-            if collect? do
-              send(parent, {ref, result})
-            else
-              send(parent, {ref, :ok})
-            end
-        end
-      end)
-
-    pref = Process.monitor(pid)
-
-    receive do
-      {:DOWN, ^pref, _type, _pid, info} ->
-        {:error, info}
-
-      {^ref, result} ->
-        Process.demonitor(pref, [:flush])
-        result
-    end
-  end
-
-  defp apply_fun(m, f, a, mfa_opts, opts) do
-    collect? = Keyword.get(mfa_opts, :collect, true)
-    parent = self()
-    ref = make_ref()
-
-    pid =
-      Node.spawn(opts.name, fn ->
-        try do
-          apply(m, f, a)
-        catch
-          kind, err ->
-            send(parent, {ref, {kind, err}})
-        else
-          result ->
-            if collect? do
-              send(parent, {ref, result})
-            else
-              send(parent, {ref, :ok})
-            end
-        end
-      end)
-
-    pref = Process.monitor(pid)
-
-    receive do
-      {:DOWN, ^pref, _type, _pid, info} ->
-        {:error, info}
-
-      {^ref, result} ->
-        Process.demonitor(pref, [:flush])
-        result
     end
   end
 
@@ -534,7 +490,9 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
       erl_flags: to_port_args(name, cookie, Keyword.get(opts, :erl_flags, [])),
       env: to_port_env(Keyword.get(opts, :env, [])),
       config: config,
-      alive?: false
+      alive?: false,
+      capture_log: Keyword.get(opts, :capture_log, false),
+      stdout: Keyword.get(opts, :stdout, false)
     }
   end
 
@@ -596,10 +554,9 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
   defp server_call(pid, msg) when is_pid(pid) do
     ref = Process.monitor(pid)
     send(pid, {self(), msg})
-
     receive do
-      {:DOWN, ^ref, _type, _pid, info} ->
-        {:error, info}
+      {:DOWN, ^ref, _type, _pid, _info} ->
+        exit({:noproc, {__MODULE__, :server_call, [pid, msg]}})
 
       {^pid, result} ->
         Process.demonitor(ref, [:flush])
@@ -609,10 +566,9 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
 
   defp server_call(name, msg) do
     name = Utils.nodename(name)
-
     case Process.whereis(name) do
       nil ->
-        raise ArgumentError, "no node manager for #{inspect(name)}"
+        exit({:noproc, {__MODULE__, :server_call, [name, msg]}})
 
       pid ->
         server_call(pid, msg)
