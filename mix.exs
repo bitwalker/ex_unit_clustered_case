@@ -9,6 +9,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
+      description: description(),
       preferred_cli_env: [
         docs: :docs,
         "hex.publish": :docs,
@@ -29,6 +30,10 @@ defmodule ExUnit.ClusteredCase.MixProject do
     [
       {:ex_doc, "~> 0.19", only: [:docs], runtime: false}
     ]
+  end
+
+  defp description do
+    "An extension for ExUnit for simplifying tests against a clustered application"
   end
 
   defp package do
