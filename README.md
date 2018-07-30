@@ -104,7 +104,6 @@ You can generate the docs with `mix docs` from a local git checkout.
       `libcluster` do the work.
 - [ ] Add fault injection support (random partitioning, flapping)
 
-
 ## License
 
 Apache 2, see the `LICENSE` file for more information.

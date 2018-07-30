@@ -23,3 +23,5 @@ erl_crash.dump
 ex_unit_clustered_case-*.tar
 
 .tool_versions
+.elixir_ls
+.sonarlint
