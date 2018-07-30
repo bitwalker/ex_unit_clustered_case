@@ -8,6 +8,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      package: package(),
       preferred_cli_env: [
         docs: :docs,
         "hex.publish": :docs,
@@ -27,6 +28,15 @@ defmodule ExUnit.ClusteredCase.MixProject do
   defp deps do
     [
       {:ex_doc, "~> 0.19", only: [:docs], runtime: false}
+    ]
+  end
+
+  defp package do
+    [
+      files: ["lib", "mix.exs", "README.md", "LICENSE"],
+      maintainers: ["Paul Schoenfelder"],
+      licenses: ["Apache 2.0"],
+      links: %{"GitHub" => "https://github.com/bitwalker/ex_unit_clustered_case"}
     ]
   end
 end
