@@ -1,5 +1,8 @@
 # ExUnit Clustered Cases
 
+[![Master](https://travis-ci.com/bitwalker/ex_unit_clustered_case.svg?branch=master)](https://travis-ci.org/bitwalker/ex_unit_clustered_case)
+[![Hex.pm Version](http://img.shields.io/hexpm/v/ex_unit_clustered_case.svg?style=flat)](https://hex.pm/packages/ex_unit_clustered_case)
+
 This project provides an extension for ExUnit for running tests against a
 clustered application. It provides an easy way to spin up multiple nodes,
 multiple clusters, and test a variety of scenarios in parallel without needing
@@ -82,14 +85,12 @@ that it can be improved.
 
 ## Installation
 
-This package is not yet on Hex, but will be soon as `:ex_unit_clustered_case`.
-
-In the mean time, you can add it to your project like so:
+You can add this library to your project like so:
 
 ```elixir
 def deps do
   [
-    {:ex_unit_clustered_case, github: "bitwalker/ex_unit_clustered_case"}
+    {:ex_unit_clustered_case, "~> 0.1"}
   ]
 end
 ```
