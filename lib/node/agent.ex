@@ -48,9 +48,12 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
     # Initialize base configuration
     project_config = Mix.Project.config()
-    # Load and persist mix config
-    {config, _paths} = Mix.Config.eval!(project_config[:config_path])
-    Mix.Config.persist(config)
+    config_path = project_config[:config_path]
+    if is_binary(config_path) and File.exists?(config_path) do
+      # Load and persist mix config
+      {config, _paths} = Mix.Config.eval!(project_config[:config_path])
+      Mix.Config.persist(config)
+    end
     # Load test modules so that functions defined in tests can be used
     # This is dirty, but works, so it stays for now
     test_paths = project_config[:test_paths] || ["test"]
