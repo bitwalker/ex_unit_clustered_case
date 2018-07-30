@@ -212,10 +212,6 @@ defmodule ExUnit.ClusteredCase.Cluster do
       raise ArgumentError, "expected list of valid callback functions, got: #{inspect(funs)}"
     end
 
-    do_call(pid, funs, opts)
-  end
-
-  defp do_call(pid, funs, opts) when is_list(funs) do
     nodes = members(pid)
     parallel? = Keyword.get(opts, :parallel, true)
     collect? = Keyword.get(opts, :collect, true)
