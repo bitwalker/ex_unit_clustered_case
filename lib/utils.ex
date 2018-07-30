@@ -1,38 +1,43 @@
 defmodule ExUnit.ClusteredCase.Utils do
   @moduledoc false
-  
+
   @doc """
   Returns true if distribution is configured for longnames,
   or false if using shortnames.
   """
   def longnames?, do: :net_kernel.longnames()
-  
+
   @doc """
   Converts a node name into either short or long form
   depending on the current distribution type
   """
-  @spec nodename(String.t | atom) :: atom
+  @spec nodename(String.t() | atom) :: atom
   def nodename(name) when is_binary(name) do
     use_longnames = longnames?()
+
     case String.split(name, "@", parts: 2, trim: true) do
       [sname] when use_longnames ->
         :"#{sname}@127.0.0.1"
+
       [sname] ->
         :"#{sname}"
+
       [sname, host] when use_longnames ->
         :"#{sname}@#{host}"
+
       [sname, _host] ->
         :"#{sname}"
     end
   end
+
   def nodename(name) when is_atom(name) do
     nodename(Atom.to_string(name))
   end
-  
+
   @doc """
   Returns the hostname of the current node
   """
-  @spec hostname() :: String.t
+  @spec hostname() :: String.t()
   def hostname() do
     result =
       if longnames?() do
@@ -41,9 +46,10 @@ defmodule ExUnit.ClusteredCase.Utils do
         {:ok, name} = :inet.gethostname()
         name
       end
+
     List.to_string(result)
   end
-  
+
   @doc """
   Returns the name of the flag representing the distributed name type to use
   """
@@ -55,7 +61,7 @@ defmodule ExUnit.ClusteredCase.Utils do
       :sname
     end
   end
-  
+
   @doc """
   Returns a new, unique node name, based on a namespace and a random suffix
   """

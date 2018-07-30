@@ -1,7 +1,7 @@
 defmodule ExUnit.ClusteredCase.Node do
   @moduledoc """
   This module handles starting new nodes
-  
+
   You can specify various options when starting a node:
 
   - `:name`, takes either a string or an atom, in either long or short form,
@@ -19,30 +19,32 @@ defmodule ExUnit.ClusteredCase.Node do
   - `:post_start_functions`, a list of functions, either captured or in `{module, function, args}` format,
     which will be invoked on the node after it is booted and initialized. Functions must be zero-arity.
   """
-  
+
   alias ExUnit.ClusteredCaseError
-  
+
   @type fun :: (() -> term) | {module, atom, [term]}
   @type node_opts :: [node_opt]
-  @type node_opt :: {:name, String.t | atom}
-                  | {:boot_timeout, pos_integer}
-                  | {:init_timeout, pos_integer}
-                  | {:erl_flags, [String.t]}
-                  | {:env, [{String.t, String.t}]}
-                  | {:config, Keyword.t}
-                  | {:post_start_functions, [fun]}
-  @type node_error :: :already_started
-                    | :started_not_connected
-                    | :boot_timeout
-                    | :init_timeout
-                    | :not_alive
-                    
+  @type node_opt ::
+          {:name, String.t() | atom}
+          | {:boot_timeout, pos_integer}
+          | {:init_timeout, pos_integer}
+          | {:erl_flags, [String.t()]}
+          | {:env, [{String.t(), String.t()}]}
+          | {:config, Keyword.t()}
+          | {:post_start_functions, [fun]}
+  @type node_error ::
+          :already_started
+          | :started_not_connected
+          | :boot_timeout
+          | :init_timeout
+          | :not_alive
+
   @doc false
   @spec start(node_opts) :: {:ok, pid} | {:error, term}
   def start(opts) when is_list(opts) do
     do_start(opts, [])
   end
-  
+
   @doc false
   @spec start_nolink(node_opts) :: {:ok, pid} | {:error, term}
   def start_nolink(opts) when is_list(opts) do
@@ -51,56 +53,57 @@ defmodule ExUnit.ClusteredCase.Node do
 
   defp do_start(opts, start_opts) do
     # We expect that the current node is already distributed
-    unless Node.alive? do
-      raise ClusteredCaseError, 
-        "cannot run clustered test cases if distribution is not active! " <>
-        "You can start distribution via Node.start/1, or with the --name flag."
+    unless Node.alive?() do
+      raise ClusteredCaseError,
+            "cannot run clustered test cases if distribution is not active! " <>
+              "You can start distribution via Node.start/1, or with the --name flag."
     end
-    
+
     if :nolink in start_opts do
       __MODULE__.Manager.start_nolink(opts)
     else
       __MODULE__.Manager.start_link(opts)
     end
   end
-  
+
   @doc false
-  @spec name(pid | String.t | atom) :: node
+  @spec name(pid | String.t() | atom) :: node
   defdelegate name(pid), to: __MODULE__.Manager
-  
+
   @doc false
-  @spec connect(pid | String.t | atom, [pid | String.t | atom]) :: :ok
+  @spec connect(pid | String.t() | atom, [pid | String.t() | atom]) :: :ok
   defdelegate connect(name, nodes), to: __MODULE__.Manager
 
   @doc false
-  @spec disconnect(pid | String.t | atom, [pid | String.t | atom]) :: :ok
+  @spec disconnect(pid | String.t() | atom, [pid | String.t() | atom]) :: :ok
   defdelegate disconnect(name, nodes), to: __MODULE__.Manager
-  
+
   @doc false
-  @spec stop(pid | String.t | atom) :: :ok
+  @spec stop(pid | String.t() | atom) :: :ok
   defdelegate stop(name), to: __MODULE__.Manager
-  
+
   @doc false
-  @spec kill(pid | String.t | atom) :: :ok
+  @spec kill(pid | String.t() | atom) :: :ok
   defdelegate kill(name), to: __MODULE__.Manager
-  
+
   @doc false
-  @spec alive?(pid | String.t | atom) :: boolean
+  @spec alive?(pid | String.t() | atom) :: boolean
   defdelegate alive?(name), to: __MODULE__.Manager
-  
+
   @doc false
-  @spec call(pid | String.t | atom, fun) :: {:ok, term} | {:error, term}
+  @spec call(pid | String.t() | atom, fun) :: {:ok, term} | {:error, term}
   defdelegate call(name, fun), to: __MODULE__.Manager
 
   @doc false
-  @spec call(pid | String.t | atom, fun, Keyword.t) :: {:ok, term} | {:error, term}
+  @spec call(pid | String.t() | atom, fun, Keyword.t()) :: {:ok, term} | {:error, term}
   defdelegate call(name, fun, opts), to: __MODULE__.Manager
 
   @doc false
-  @spec call(pid | String.t | atom, module, atom, [term]) :: {:ok, term} | {:error, term}
+  @spec call(pid | String.t() | atom, module, atom, [term]) :: {:ok, term} | {:error, term}
   defdelegate call(name, m, f, a), to: __MODULE__.Manager
 
   @doc false
-  @spec call(pid | String.t | atom, module, atom, [term], Keyword.t) :: {:ok, term} | {:error, term}
+  @spec call(pid | String.t() | atom, module, atom, [term], Keyword.t()) ::
+          {:ok, term} | {:error, term}
   defdelegate call(name, m, f, a, opts), to: __MODULE__.Manager
 end

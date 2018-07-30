@@ -9,16 +9,16 @@ defmodule ExUnit.ClusteredCase.Cluster.PartitionChange do
   @type disconnects :: %{node => [node]}
 
   @type t :: %__MODULE__{
-    partitions: Partition.t,
-    connects: connects,
-    disconnects: disconnects
-  }
+          partitions: Partition.t(),
+          connects: connects,
+          disconnects: disconnects
+        }
 
   @doc """
   Create a new PartitionChange given a list of partitions, and the set of
   connection and disconnection operations needed to perform the change.
   """
-  @spec new(Partition.t, connects, disconnects) :: t
+  @spec new(Partition.t(), connects, disconnects) :: t
   def new(partitions, connects, disconnects) do
     %__MODULE__{
       partitions: partitions,
@@ -26,7 +26,7 @@ defmodule ExUnit.ClusteredCase.Cluster.PartitionChange do
       disconnects: disconnects
     }
   end
-  
+
   @doc """
   Executes the given PartitionChange by performing required connects/disconnects.
 
