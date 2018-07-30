@@ -10,6 +10,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
       deps: deps(),
       package: package(),
       description: description(),
+      elixirc_paths: elixirc_paths(Mix.env),
       preferred_cli_env: [
         docs: :docs,
         "hex.publish": :docs,
@@ -44,4 +45,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
       links: %{"GitHub" => "https://github.com/bitwalker/ex_unit_clustered_case"}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end
