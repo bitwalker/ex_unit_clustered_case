@@ -249,6 +249,10 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
 
       {:EXIT, ^port, reason} ->
         exit(reason)
+        
+      {:EXIT, _, _} ->
+        # Some child process terminated
+        loop(parent, debug, agent_pid, opts)
 
       {:nodedown, ^agent_node, _} when heart? ->
         # ignore..
