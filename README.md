@@ -1,6 +1,6 @@
 # ExUnit Clustered Cases
 
-[![Master](https://travis-ci.com/bitwalker/ex_unit_clustered_case.svg?branch=master)](https://travis-ci.org/bitwalker/ex_unit_clustered_case)
+[![Master](https://travis-ci.com/bitwalker/ex_unit_clustered_case.svg?branch=master)](https://travis-ci.com/bitwalker/ex_unit_clustered_case)
 [![Hex.pm Version](http://img.shields.io/hexpm/v/ex_unit_clustered_case.svg?style=flat)](https://hex.pm/packages/ex_unit_clustered_case)
 
 This project provides an extension for ExUnit for running tests against a
