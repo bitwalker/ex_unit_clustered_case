@@ -5,7 +5,7 @@ elixir:
 otp_release:
   - 21.0
 script:
-  - "BOOT_TIMEOUT=10000 MIX_ENV=test mix do deps.get, test"
+  - "BOOT_TIMEOUT=30000 MIX_ENV=test mix do deps.get, test"
 notifications:
   recipients:
     - paulschoenfelder@gmail.com
