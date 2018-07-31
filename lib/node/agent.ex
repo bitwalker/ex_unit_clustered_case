@@ -12,13 +12,12 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
   # node is started via `Port.open/2` and finishes boot
   @spec start([atom]) :: pid
   def start([manager_node]) when is_atom(manager_node) do
-    spawn(__MODULE__, :init, [manager_node])
+    manager_name = Manager.name_of(Node.self())
+    spawn(__MODULE__, :init, [manager_node, manager_name])
   end
 
   @doc false
-  def init(manager_node) do
-    manager_name = Manager.name_of(Node.self())
-
+  def init(manager_node, manager_name) do
     Process.flag(:trap_exit, true)
     Process.register(self(), name_of())
 
@@ -34,9 +33,6 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         IO.puts("Distribution not started! This node is missing configuration! Terminating..")
         :erlang.halt()
     end
-
-    # Watch the master
-    Node.monitor(manager_node, true)
 
     # Load and start critical applications
     Application.ensure_all_started(:elixir, :permanent)
@@ -96,9 +92,6 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
   defp loop(manager, manager_node) do
     receive do
-      {:nodedown, ^manager_node} ->
-        :erlang.halt()
-
       {:terminate, opts} ->
         if Keyword.get(opts, :brutal, false) do
           :erlang.halt()
@@ -126,11 +119,11 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         disconnect_nodes(from, [node])
         
       {from, :spawn_fun, fun, fun_opts} ->
-        reply = spawn_fun(manager_node, fun, fun_opts)
+        reply = spawn_fun(fun, fun_opts)
         send(from, {Node.self(), self(), reply})
 
       {from, :apply_fun, mfa, fun_opts} ->
-        reply = spawn_fun(manager_node, mfa, fun_opts)
+        reply = spawn_fun(mfa, fun_opts)
         send(from, {Node.self(), self(), reply})
 
       msg ->
@@ -165,7 +158,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     end
   end
   
-  defp spawn_fun(manager_node, fun, opts) when is_function(fun) do
+  defp spawn_fun(fun, opts) when is_function(fun) do
     collect? = Keyword.get(opts, :collect, true)
     parent = self()
     ref = make_ref()
@@ -188,9 +181,6 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
       end)
 
     receive do
-      {:nodedown, ^manager_node} ->
-        :erlang.halt()
-
       {:terminate, _opts} ->
         :erlang.halt()
 
@@ -203,7 +193,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     end
   end
 
-  defp spawn_fun(manager_node, {m, f, a}, opts) do
+  defp spawn_fun({m, f, a}, opts) do
     collect? = Keyword.get(opts, :collect, true)
     parent = self()
     ref = make_ref()
@@ -226,9 +216,6 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
       end)
 
     receive do
-      {:nodedown, ^manager_node} ->
-        :erlang.halt()
-
       {:terminate, _opts} ->
         :erlang.halt()
 

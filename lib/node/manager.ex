@@ -266,14 +266,15 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
         # Some child process terminated
         loop(parent, debug, agent_pid, opts)
 
-      {:nodedown, ^agent_node, _} when heart? ->
-        # ignore..
+      {:nodedown, ^agent_node, _} ->
         loop(parent, debug, agent_pid, %{opts | alive?: false})
 
-      {:nodedown, ^agent_node, _} ->
-        exit(:nodedown)
+      {:nodedown, _, _} ->
+        # ignore..
+        loop(parent, debug, agent_pid, opts)
 
-      {:nodeup, ^agent_node, _} when heart? ->
+      {:nodeup, ^agent_node, _} ->
+        # Node was restarted by us or by init
         with {:ok, agent_pid} <- init_node(parent, opts),
              :ok <- configure_node(parent, agent_pid, opts) do
           handle_node_initialized(parent, debug, agent_pid, %{opts | alive?: true})
@@ -282,10 +283,8 @@ defmodule ExUnit.ClusteredCase.Node.Manager do
             exit(reason)
         end
 
-      {:nodedown, _, _} ->
-        loop(parent, debug, agent_pid, opts)
-
       {:nodeup, _, _} ->
+        # ignore..
         loop(parent, debug, agent_pid, opts)
 
       {from, :is_alive} ->
