@@ -7,17 +7,20 @@ defmodule ExUnit.ClusteredCase.Node do
   - `:name`, takes either a string or an atom, in either long or short form,
     this sets the node name and id.
   - `:boot_timeout`, specifies the amount of time to wait for a node to perform it's
-    initial boot sequence before timing out
+    initial boot sequence before timing out.
   - `:init_timeout`, specifies the amount of time to wait for the node agent to complete
     initializing the node (loading and starting required applications, applying configuration,
-    loading test modules, and executing post-start functions)
-  - `:erl_flags`, a list of arguments to pass to `erl` when starting the node, e.g. `["-init_debug"]`
+    loading test modules, and executing post-start functions).
+  - `:erl_flags`, a list of arguments to pass to `erl` when starting the node, e.g. `["-init_debug"]`.
   - `:env`, a list of tuples containing environment variables to export in the node's environment,
-    e.g. `[{"PORT", "8080"}]`
+    e.g. `[{"PORT", "8080"}]`.
   - `:config`, a `Keyword` list containing configuration overrides to apply to the node,
-    should be in the form of `[app: [key: value]]`
+    should be in the form of `[app: [key: value]]`.
   - `:post_start_functions`, a list of functions, either captured or in `{module, function, args}` format,
     which will be invoked on the node after it is booted and initialized. Functions must be zero-arity.
+  - `:stdout`, redirect output to a device or process with stdout: `:standard_error` | `:standard_io` | `pid`.
+  - `:capture_log`, capture the entire log from a node with `capture_log: true`,
+    can get the captured logs for a specific node with `Cluster.log(node)`.
   """
 
   alias ExUnit.ClusteredCaseError
@@ -32,6 +35,8 @@ defmodule ExUnit.ClusteredCase.Node do
           | {:env, [{String.t(), String.t()}]}
           | {:config, Keyword.t()}
           | {:post_start_functions, [fun]}
+          | {:stdout, atom | pid}
+          | {:capture_log, boolean}
   @type node_error ::
           :already_started
           | :started_not_connected

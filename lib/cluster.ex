@@ -22,6 +22,8 @@ defmodule ExUnit.ClusteredCase.Cluster do
           | {:boot_timeout, pos_integer}
           | {:init_timeout, pos_integer}
           | {:post_start_functions, [callback]}
+          | {:stdout, atom | pid}
+          | {:capture_log, boolean}
 
   defstruct [
     :parent,
@@ -373,7 +375,9 @@ defmodule ExUnit.ClusteredCase.Cluster do
         config: Mix.Config.merge(global_config, Keyword.get(n, :config, [])),
         boot_timeout: Keyword.get(n, :boot_timeout, Keyword.get(opts, :boot_timeout)),
         init_timeout: Keyword.get(n, :init_timeout, Keyword.get(opts, :init_timeout)),
-        post_start_functions: global_psf ++ Keyword.get(n, :post_start_functions, [])
+        post_start_functions: global_psf ++ Keyword.get(n, :post_start_functions, []),
+        stdout: Keyword.get(n, :stdout, Keyword.get(opts, :stdout, false)),
+        capture_log: Keyword.get(n, :capture_log, Keyword.get(opts, :capture_log, false))
       ]
 
       # Strip out any nil or empty options
