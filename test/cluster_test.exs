@@ -49,11 +49,11 @@ defmodule ExUnit.ClusteredCase.Test.ClusterTest do
     import ExUnit.CaptureIO
     opts = [
       boot_timeout: boot_timeout(),
-      cluster_size: 1,
+      cluster_size: 2,
       stdout: :standard_error
     ]
     assert {:ok, c} = Cluster.start(opts)
-    [pid] = Cluster.members(c)
+    [pid, _pid] = Cluster.members(c)
     assert capture_io(:standard_error, fn ->
       N.call(pid, IO, :puts, ["stdout hello from cluster"])
     end) =~ "stdout hello from cluster"
