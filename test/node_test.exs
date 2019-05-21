@@ -10,10 +10,8 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
 
     opts = [post_start_functions: [pingback]]
 
-    {:ok, pid} = start_node(opts)
+    assert {:ok, _} = start_node(opts)
     assert_receive {^test_pid, :pong}, 5_000
-
-    stop_node(pid)
   end
 
   test "provided configuration is applied" do
@@ -21,8 +19,6 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert {:ok, pid} = start_node(config: config)
     me = self()
     assert ^me = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :overriden_by])
-
-    stop_node(pid)
   end
 
   test "env vars are applied as expected" do
@@ -31,8 +27,6 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     config = [ex_unit_clustered_case: [env_var: env]]
     assert {:ok, pid} = start_node(config: config)
     assert [{"SOME_VAR", ^expected}] = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :env_var])
-
-    stop_node(pid)
   end
 
   test "can connect nodes to form a cluster" do
@@ -45,9 +39,6 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert :ok = N.connect(name1, [name2])
     assert [^name2] = N.call(name1, Node, :list, [])
     assert [^name1] = N.call(name2, Node, :list, [])
-
-    stop_node(pid1)
-    stop_node(pid2)
   end
 
   test "can restart a node with heart mode" do
@@ -60,8 +51,6 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     :timer.sleep(boot_timeout())
     assert N.alive?(pid)
     assert name in Node.list([:connected])
-
-    stop_node(pid)
   end
 
   test "can capture log" do
@@ -69,8 +58,6 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     N.call(pid, IO, :puts, ["hello from node"])
     assert {:ok, log} = N.log(pid)
     assert log =~ "hello from node"
-
-    stop_node(pid)
   end
 
   test "can redirect log to device" do
@@ -83,7 +70,5 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert capture_io(:standard_error, fn ->
       N.call(pid, IO, :puts, ["hello from node"])
     end) =~ "hello from node"
-
-    stop_node(pid)
   end
 end

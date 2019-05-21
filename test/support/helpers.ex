@@ -22,8 +22,4 @@ defmodule ExUnit.ClusteredCase.Support do
     |> set_boot_timeout()
     |> ExUnit.ClusteredCase.Node.start()
   end
-
-  def stop_node(node) do
-    ExUnit.ClusteredCase.Node.stop(node)
-  end
 end
