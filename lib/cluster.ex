@@ -334,10 +334,8 @@ defmodule ExUnit.ClusteredCase.Cluster do
     {:reply, nodenames(state), state}
   end
 
-  def handle_call(:terminate, from, state) do
-    Enum.each(nodepids(state), &ExUnit.ClusteredCase.Node.stop/1)
-    GenServer.reply(from, :ok)
-    {:stop, :shutdown, state}
+  def handle_call(:terminate, _from, state) do
+    {:stop, :shutdown, :ok, state}
   end
 
   def handle_info({:EXIT, parent, reason}, %{parent: parent} = state) do
@@ -351,6 +349,12 @@ defmodule ExUnit.ClusteredCase.Cluster do
   def handle_info({:EXIT, task, reason}, state) do
     Logger.warn("Task #{inspect(task)} failed with reason: #{inspect(reason)}")
     {:noreply, state}
+  end
+
+  def terminate(_reason, state) do
+    nodepids(state)
+    |> Task.async_stream(&ExUnit.ClusteredCase.Node.stop/1)
+    |> Enum.to_list()
   end
 
   ## Private
