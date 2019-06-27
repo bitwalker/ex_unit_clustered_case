@@ -52,6 +52,22 @@ defmodule ExUnit.ClusteredCase.Cluster do
   @spec stop(pid) :: :ok
   def stop(pid), do: GenServer.call(pid, :terminate, :infinity)
 
+  @doc false
+  @spec reset(pid) :: :ok
+  def reset(pid), do: GenServer.call(pid, :reset, :infinity)
+
+  @doc """
+  Stops a running node in a cluster. Expects the cluster and node to stop.
+  """
+  @spec stop_node(pid,  node) :: :ok
+  def stop_node(pid, node), do: GenServer.call(pid, {:stop_node, node}, :infinity)
+
+  @doc """
+  Kills a running node in a cluster. Expects the cluster and node to stop.
+  """
+  @spec kill_node(pid, node) :: :ok
+  def kill_node(pid, node), do: GenServer.call(pid, {:kill_node, node}, :infinity)
+
   @doc """
   Get the captured log for a specific node in the cluster
   """
@@ -279,6 +295,26 @@ defmodule ExUnit.ClusteredCase.Cluster do
           decorate_nodes(custom_nodes, opts)
       end
 
+    case init_nodes(nodes) do
+      {:stop, _} = err ->
+        err
+
+      {:ok, results} ->
+        state = to_cluster_state(parent, nodes, opts, results)
+
+        case state.partition_spec do
+          {:error, _} = err ->
+            {:stop, err}
+
+          partition_spec ->
+            change = Partition.partition(nodenames(state), nil, partition_spec)
+            PartitionChange.execute!(change)
+            {:ok, %{state | :partitions => change.partitions}}
+        end
+    end
+  end
+
+  defp init_nodes(nodes) do
     cluster_start_timeout = get_cluster_start_timeout(nodes)
 
     results =
@@ -291,17 +327,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
       terminate_started(results)
       {:stop, {:cluster_start, failed_nodes(results)}}
     else
-      state = to_cluster_state(parent, nodes, opts, results)
-
-      case state.partition_spec do
-        {:error, _} = err ->
-          {:stop, err}
-
-        partition_spec ->
-          change = Partition.partition(nodenames(state), nil, partition_spec)
-          PartitionChange.execute!(change)
-          {:ok, %{state | :partitions => change.partitions}}
-      end
+      {:ok, results}
     end
   end
 
@@ -334,10 +360,50 @@ defmodule ExUnit.ClusteredCase.Cluster do
     {:reply, nodenames(state), state}
   end
 
+  def handle_call(:reset, from, %{pids: pidmap, nodes: nodes} = state) do
+    # Find killed/stopped nodes and restart them
+    dead_nodes = 
+      pidmap
+      |> Enum.filter(fn {_node, pid} -> pid == nil end)
+      |> Enum.map(fn {node, _} -> node end)
+      |> Map.new()
+
+    dead =
+      nodes
+      |> Enum.filter(fn n -> Map.has_key?(dead_nodes, n[:name]) end)
+
+    case init_nodes(dead) do
+      {:stop, reason} ->
+        GenServer.reply(from, {:error, reason})
+        {:stop, reason, state}
+
+      {:ok, results} ->
+        started =
+          for {name, {:ok, pid}} <- results, into: %{} do
+            {name, pid}
+          end
+        {:reply, :ok, %{state | pids: Map.merge(pidmap, started)}}
+    end
+  end
+
   def handle_call(:terminate, from, state) do
     Enum.each(nodepids(state), &ExUnit.ClusteredCase.Node.stop/1)
     GenServer.reply(from, :ok)
     {:stop, :shutdown, state}
+  end
+
+  def handle_call({:stop_node, node}, _from, %{pids: pidmap} = state) do
+    pid = Map.fetch!(pidmap, node)
+    pidmap = Map.put(pidmap, node, pid)
+    ExUnit.ClusteredCase.Node.stop(node)
+    {:reply, :ok, %{state | pids: pidmap}}
+  end
+
+  def handle_call({:kill_node, node}, _from, %{pids: pidmap} = state) do
+    pid = Map.fetch!(pidmap, node)
+    pidmap = Map.put(pidmap, node, pid)
+    ExUnit.ClusteredCase.Node.kill(node)
+    {:reply, :ok, %{state | pids: pidmap}}
   end
 
   def handle_info({:EXIT, parent, reason}, %{parent: parent} = state) do
@@ -395,11 +461,11 @@ defmodule ExUnit.ClusteredCase.Cluster do
   end
 
   defp nodenames(%{pids: pidmap}) do
-    for {name, _pid} <- pidmap, do: name
+    for {name, pid} <- pidmap, pid != nil, do: name
   end
 
   defp nodepids(%{pids: pids}) do
-    for {_name, pid} <- pids, do: pid
+    for {_name, pid} <- pids, pid != nil, do: pid
   end
 
   defp sync_call_all(nodes, funs, collect?),

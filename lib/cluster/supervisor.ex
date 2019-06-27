@@ -28,6 +28,7 @@ defmodule ExUnit.ClusteredCase.Cluster.Supervisor do
         res
 
       {:error, {:already_started, pid}} ->
+        :ok = Cluster.reset(pid)
         {:ok, pid}
 
       {:error, _} = err ->
