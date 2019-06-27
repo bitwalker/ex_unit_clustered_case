@@ -34,6 +34,8 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         :erlang.halt()
     end
 
+    true = :erlang.monitor_node(manager_node, true)
+
     # Load and start critical applications
     Application.ensure_all_started(:elixir, :permanent)
     Application.ensure_all_started(:logger, :permanent)
@@ -102,6 +104,9 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         else
           :init.stop()
         end
+
+      {:nodedown, ^manager_node} ->
+        :init.stop()
 
       {:EXIT, _, :normal} ->
         :ok
