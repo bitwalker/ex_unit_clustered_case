@@ -85,7 +85,7 @@ defmodule ExUnit.ClusteredCase.Node.Ports.Port do
       {^port, {:data, data}} when capture? ->
         # Capture the output and also redirect to the given stdout device
         if stdout do
-          IO.puts(stdout, ["#{name}: ", data])
+          write_output(stdout, ["#{name}: ", data])
         end
         loop(parent, debug, port, owner, opts, [data | log])
 
@@ -95,7 +95,7 @@ defmodule ExUnit.ClusteredCase.Node.Ports.Port do
 
       {^port, {:data, data}} ->
         # Simply redirect to the given stdout device
-        IO.puts(stdout, ["#{name}: ", data])
+        write_output(stdout, ["#{name}: ", data])
         loop(parent, debug, port, owner, opts, log)
 
       {from, :get_captured_log} when is_pid(from) ->
@@ -147,5 +147,13 @@ defmodule ExUnit.ClusteredCase.Node.Ports.Port do
       timeout ->
         exit({:timeout, {__MODULE__, :server_call, [pid, msg, timeout]}})
     end
+  end
+
+  defp write_output(device, content) when is_pid(device) or device in [:standard_error, :standard_io] do
+    IO.puts(device, content)
+  catch
+    _, _ ->
+    # If this fails, it means the device is already closed, so just pretend we're fine
+    :ok
   end
 end
