@@ -56,6 +56,7 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
   test "can capture log" do
     assert {:ok, pid} = start_node(capture_log: true)
     N.call(pid, IO, :puts, ["hello from node"])
+    Process.sleep(5_000)
     assert {:ok, log} = N.log(pid)
     assert log =~ "hello from node"
   end
@@ -69,6 +70,7 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
     assert {:ok, pid} = start_node(stdout: :standard_error)
     assert capture_io(:standard_error, fn ->
       N.call(pid, IO, :puts, ["hello from node"])
+      Process.sleep(5_000)
     end) =~ "hello from node"
   end
 end
