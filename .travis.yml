@@ -1,9 +1,11 @@
 sudo: false
 language: elixir
 elixir:
-  - 1.7
+  - 1.8
+  - 1.9
 otp_release:
   - 21.0
+  - 22.0
 before_script:
   - epmd -daemon
   - MIX_ENV=test mix deps.get
@@ -11,4 +13,4 @@ script:
   - "BOOT_TIMEOUT=30000 MIX_ENV=test mix test"
 notifications:
   recipients:
-    - paulschoenfelder@gmail.com
+    - paulschoenfelder@fastmail.com
