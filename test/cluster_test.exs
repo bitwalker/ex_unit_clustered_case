@@ -31,4 +31,58 @@ defmodule ExUnit.ClusteredCase.Test.ClusterTest do
     members = Cluster.members(c)
     assert ^members = Cluster.map(c, fn -> Node.self() end)
   end
+
+  test "can capture log across a cluster" do
+    opts = [
+      boot_timeout: boot_timeout(),
+      cluster_size: 1,
+      capture_log: true,
+    ]
+    assert {:ok, c} = Cluster.start(opts)
+    [pid] = Cluster.members(c)
+    N.call(pid, IO, :puts, ["hello from cluster"])
+    assert {:ok, log} = N.log(pid)
+    assert log =~ "hello from cluster"
+  end
+
+  test "can redirect log to device across a cluster" do
+    import ExUnit.CaptureIO
+    opts = [
+      boot_timeout: boot_timeout(),
+      cluster_size: 2,
+      stdout: :standard_error
+    ]
+    assert {:ok, c} = Cluster.start(opts)
+    [pid, _pid] = Cluster.members(c)
+    assert capture_io(:standard_error, fn ->
+      N.call(pid, IO, :puts, ["stdout hello from cluster"])
+    end) =~ "stdout hello from cluster"
+  end
+
+  test "capture_log and stdout when init a cluster using nodes options" do
+    import ExUnit.CaptureIO
+    opts = [
+      nodes: [
+        [{:name, "node1"}, {:boot_timeout, boot_timeout()}, {:capture_log, true}],
+        [{:name, "node2"}, {:boot_timeout, boot_timeout()}, {:stdout, :standard_error}]
+      ]
+    ]
+    assert {:ok, c} = Cluster.start(opts)
+    [pid1, pid2] = Cluster.members(c)
+    N.call(pid1, IO, :puts, ["hello from cluster"])
+    assert {:ok, log} = N.log(pid1)
+    assert log =~ "hello from cluster"
+
+    N.call(pid2, IO, :puts, ["hello from cluster"])
+    assert {:ok, ""} = N.log(pid2)
+
+    assert capture_io(:standard_error, fn ->
+      N.call(pid1, IO, :puts, ["stdout hello from cluster"])
+    end) == ""
+
+    assert capture_io(:standard_error, fn ->
+      N.call(pid2, IO, :puts, ["stdout hello from cluster"])
+    end) =~ "stdout hello from cluster"
+  end
+
 end

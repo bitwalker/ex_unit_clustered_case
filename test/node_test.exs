@@ -22,10 +22,11 @@ defmodule ExUnit.ClusteredCase.Test.NodeTest do
   end
 
   test "env vars are applied as expected" do
-    env = [{"SOME_VAR", "#{inspect(self())}"}]
-    assert {:ok, pid} = start_node(env: env)
     expected = "#{inspect(self())}"
-    assert ^expected = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :env_var])
+    env = [{"SOME_VAR", expected}]
+    config = [ex_unit_clustered_case: [env_var: env]]
+    assert {:ok, pid} = start_node(config: config)
+    assert [{"SOME_VAR", ^expected}] = N.call(pid, Application, :get_env, [:ex_unit_clustered_case, :env_var])
   end
 
   test "can connect nodes to form a cluster" do

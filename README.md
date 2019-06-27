@@ -103,11 +103,11 @@ with `mix docs` from a local git checkout.
 By default, output written to stdio/stderr on nodes will be hidden. You can change this behavior for testing
 with the following node options:
 
-- Capture the entire log from a node with `capture: true`
+- Capture the entire log from a node with `capture_log: true`
 - Redirect output to a device or process with `stdout: :standard_error | :standard_io | pid`
 - Both capture _and_ redirect by setting both options. 
 
-Default values are `capture: false` and `stdout: false`
+Default values are `capture_log: false` and `stdout: false`
 
 When you capture, you can get the captured logs for a specific node with `Cluster.log(node)`. If capturing
 is not enabled, this will simply return `{:ok, ""}`, otherwise it returns `{:ok, binary}`. When you call this
