@@ -59,7 +59,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
   @doc """
   Stops a running node in a cluster. Expects the cluster and node to stop.
   """
-  @spec stop_node(pid,  node) :: :ok
+  @spec stop_node(pid, node) :: :ok
   def stop_node(pid, node), do: GenServer.call(pid, {:stop_node, node}, :infinity)
 
   @doc """
@@ -147,7 +147,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
   See `partition/2` for specification details.
 
   Repartitioning performs the minimal set of changes required to
-  converge on the partitioning scheme in an attempt to minimize the 
+  converge on the partitioning scheme in an attempt to minimize the
   amount of churn. That said, some churn is expected, so bear that in
   mind when writing tests with partitioning events involved.
   """
@@ -362,15 +362,11 @@ defmodule ExUnit.ClusteredCase.Cluster do
 
   def handle_call(:reset, from, %{pids: pidmap, nodes: nodes} = state) do
     # Find killed/stopped nodes and restart them
-    dead_nodes = 
-      pidmap
-      |> Enum.filter(fn {_node, pid} -> pid == nil end)
-      |> Enum.map(fn {node, _} -> node end)
-      |> Map.new()
+    dead_nodes = for {node, nil} <- pidmap, do: node
 
     dead =
       nodes
-      |> Enum.filter(fn n -> Map.has_key?(dead_nodes, n[:name]) end)
+      |> Enum.filter(fn n -> Enum.member?(dead_nodes, n[:name]) end)
 
     case init_nodes(dead) do
       {:stop, reason} ->
@@ -382,6 +378,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
           for {name, {:ok, pid}} <- results, into: %{} do
             {name, pid}
           end
+
         {:reply, :ok, %{state | pids: Map.merge(pidmap, started)}}
     end
   end
@@ -393,16 +390,14 @@ defmodule ExUnit.ClusteredCase.Cluster do
   end
 
   def handle_call({:stop_node, node}, _from, %{pids: pidmap} = state) do
-    pid = Map.fetch!(pidmap, node)
-    pidmap = Map.put(pidmap, node, pid)
-    ExUnit.ClusteredCase.Node.stop(node)
+    {node_pid, pidmap} = Map.get_and_update!(pidmap, node, fn pid -> {pid, nil} end)
+    ExUnit.ClusteredCase.Node.stop(node_pid)
     {:reply, :ok, %{state | pids: pidmap}}
   end
 
   def handle_call({:kill_node, node}, _from, %{pids: pidmap} = state) do
-    pid = Map.fetch!(pidmap, node)
-    pidmap = Map.put(pidmap, node, pid)
-    ExUnit.ClusteredCase.Node.kill(node)
+    {node_pid, pidmap} = Map.get_and_update!(pidmap, node, fn pid -> {pid, nil} end)
+    ExUnit.ClusteredCase.Node.kill(node_pid)
     {:reply, :ok, %{state | pids: pidmap}}
   end
 

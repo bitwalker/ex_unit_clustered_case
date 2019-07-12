@@ -5,8 +5,10 @@ defmodule ExUnit.ClusteredCase.Support do
     case System.get_env("BOOT_TIMEOUT") do
       nil when is_nil(default) ->
         10_000
+
       nil ->
         default
+
       val ->
         String.to_integer(val)
     end
@@ -21,5 +23,19 @@ defmodule ExUnit.ClusteredCase.Support do
     opts
     |> set_boot_timeout()
     |> ExUnit.ClusteredCase.Node.start()
+  end
+
+  def wait_until(condition, timeout \\ 5_000) do
+    cond do
+      condition.() ->
+        :ok
+
+      timeout <= 0 ->
+        ExUnit.Assertions.flunk("Timeout reached waiting for condition")
+
+      true ->
+        Process.sleep(100)
+        wait_until(condition, timeout - 100)
+    end
   end
 end
