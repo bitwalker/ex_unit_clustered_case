@@ -8,13 +8,36 @@ clustered application. It provides an easy way to spin up multiple nodes,
 multiple clusters, and test a variety of scenarios in parallel without needing
 to manage the clustering aspect yourself.
 
-**NOTE:** This library requires Elixir 1.7+, due to a bug in earlier versions of 
-ExUnit which would generate different module md5s on every compile. This results 
-in being unable to define functions in test modules for execution on other nodes, 
+**NOTE:** This library requires Elixir 1.7+, due to a bug in earlier versions of
+ExUnit which would generate different module md5s on every compile. This results
+in being unable to define functions in test modules for execution on other nodes,
 which is an impractical constraint for testing. This library has to compile test
 modules on each node separately, as they are compiled in-memory by the test compiler,
 and so are unable to be remotely code loaded like modules which are compiled to `.beam`
 files on disk.
+
+## Installation
+
+You can add this library to your project like so:
+
+```elixir
+def deps do
+  [
+    {:ex_unit_clustered_case, "~> 0.4"}
+  ]
+end
+```
+
+Then, add the following lines to the top of your `test_helper.exs` file to start ExUnit with distribution:
+
+```elixir
+{_, 0} = System.cmd("epmd", ["-daemon"])
+Node.start(:"ex_unit@127.0.0.1", :longnames)
+
+...
+
+ExUnit.start()
+```
 
 ## Usage
 
@@ -80,22 +103,10 @@ are desirable to test, but they boil down to the following:
 - The behavior when a partition occurs and is subsequently healed
 - The behavior when one or more members of a cluster are "flapping", i.e. joining and leaving the cluster rapidly
 
-If you are finding one of these scenarios difficult to test using this library, please let me know so 
+If you are finding one of these scenarios difficult to test using this library, please let me know so
 that it can be improved.
 
-## Installation
-
-You can add this library to your project like so:
-
-```elixir
-def deps do
-  [
-    {:ex_unit_clustered_case, "~> 0.1"}
-  ]
-end
-```
-
-You can view the docs on [hexdocs.pm](https://hexdocs.pm/ex_unit_clustered_case) or generate the docs 
+You can find more information in the docs on [hexdocs.pm](https://hexdocs.pm/ex_unit_clustered_case) or generate the docs
 with `mix docs` from a local git checkout.
 
 ## Capturing Output
@@ -105,7 +116,7 @@ with the following node options:
 
 - Capture the entire log from a node with `capture_log: true`
 - Redirect output to a device or process with `stdout: :standard_error | :standard_io | pid`
-- Both capture _and_ redirect by setting both options. 
+- Both capture _and_ redirect by setting both options.
 
 Default values are `capture_log: false` and `stdout: false`
 
