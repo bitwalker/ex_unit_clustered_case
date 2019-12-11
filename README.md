@@ -28,14 +28,11 @@ def deps do
 end
 ```
 
-Then, add the following lines to the top of your `test_helper.exs` file to start ExUnit with distribution:
+Then, add the following lines right above `ExUnit.start/1` in your `test_helper.exs` file to switch ExUnit's node to allow distribution:
 
 ```elixir
 {_, 0} = System.cmd("epmd", ["-daemon"])
 Node.start(:"ex_unit@127.0.0.1", :longnames)
-
-...
-
 ExUnit.start()
 ```
 
