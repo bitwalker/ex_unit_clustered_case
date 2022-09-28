@@ -296,6 +296,9 @@ defmodule ExUnit.ClusteredCase do
         case result do
           {:error, _} = err ->
             exit(err)
+
+          _ ->
+            :ok
         end
 
         context
