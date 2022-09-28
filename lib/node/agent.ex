@@ -56,8 +56,8 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
     if is_binary(config_path) and File.exists?(config_path) do
       # Load and persist mix config
-      {config, _paths} = Mix.Config.eval!(config_path)
-      Mix.Config.persist(config)
+      config = Config.Reader.read!(config_path)
+      Application.put_all_env(config)
     end
 
     # Load test modules so that functions defined in tests can be used
@@ -84,12 +84,12 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     loop(manager_name, manager_node)
   rescue
     ex ->
-      msg = Exception.message(ex) <> "\n" <> Exception.format_stacktrace(System.stacktrace())
+      msg = Exception.message(ex) <> "\n" <> Exception.format_stacktrace(__STACKTRACE__)
       manager_name = Manager.name_of(Node.self())
       send({manager_name, manager_node}, {Node.self(), self(), {:init_failed, msg}})
   catch
     kind, payload ->
-      msg = Exception.format(kind, payload, System.stacktrace())
+      msg = Exception.format(kind, payload, __STACKTRACE__)
       manager_name = Manager.name_of(Node.self())
       send({manager_name, manager_node}, {Node.self(), self(), {:init_failed, msg}})
   after
@@ -112,7 +112,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
         :ok
 
       {from, :configure, config} ->
-        Mix.Config.persist(config)
+        Application.put_all_env(config)
         send(from, {Node.self(), self(), :node_configured})
 
       {from, :connect, nodes} when is_list(nodes) ->

@@ -1,4 +1,4 @@
-use Mix.Config
+import Config
 
 config :ex_unit_clustered_case,
   overriden_by: :undefined,

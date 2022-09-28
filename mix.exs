@@ -4,8 +4,8 @@ defmodule ExUnit.ClusteredCase.MixProject do
   def project do
     [
       app: :ex_unit_clustered_case,
-      version: "0.4.0",
-      elixir: "~> 1.7",
+      version: "0.5.0",
+      elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -21,7 +21,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:crypto, :logger],
+      extra_applications: [:crypto, :logger, :tools],
       mod: {ExUnit.ClusteredCase.App, []}
     ]
   end
@@ -29,7 +29,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.19", only: [:docs], runtime: false}
+      {:ex_doc, ">= 0.0.0", only: [:docs], runtime: false}
     ]
   end
 
@@ -41,7 +41,7 @@ defmodule ExUnit.ClusteredCase.MixProject do
     [
       files: ["lib", "mix.exs", "README.md", "LICENSE"],
       maintainers: ["Paul Schoenfelder"],
-      licenses: ["Apache 2.0"],
+      licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/bitwalker/ex_unit_clustered_case"}
     ]
   end

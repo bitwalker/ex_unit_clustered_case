@@ -433,7 +433,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
         name: Utils.nodename(name),
         env: Keyword.merge(global_env, Keyword.get(n, :env, [])),
         erl_flags: Keyword.merge(global_flags, Keyword.get(n, :erl_flags, [])),
-        config: Mix.Config.merge(global_config, Keyword.get(n, :config, [])),
+        config: Config.Reader.merge(global_config, Keyword.get(n, :config, [])),
         boot_timeout: Keyword.get(n, :boot_timeout, Keyword.get(opts, :boot_timeout)),
         init_timeout: Keyword.get(n, :init_timeout, Keyword.get(opts, :init_timeout)),
         post_start_functions: global_psf ++ Keyword.get(n, :post_start_functions, []),
