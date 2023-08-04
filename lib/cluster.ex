@@ -425,7 +425,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
   defp decorate_nodes(nodes, opts) do
     for n <- nodes do
       name = Keyword.get(n, :name)
-      global_env = Keyword.get(opts, :env, [])
+      global_env = Keyword.get(opts, :env, []) |> attach_env(opts)
       global_flags = Keyword.get(opts, :erl_flags, [])
       global_config = Keyword.get(opts, :config, [])
       global_psf = Keyword.get(opts, :post_start_functions, [])
@@ -454,6 +454,12 @@ defmodule ExUnit.ClusteredCase.Cluster do
           acc
       end)
     end
+  end
+
+  defp attach_env(env, opts) do
+    value = Keyword.get(opts, :hidden_connect, true) |> Atom.to_string()
+
+    [{Utils.hidden_connect_key(), value} | env]
   end
 
   defp nodenames(%{pids: pidmap}) do
