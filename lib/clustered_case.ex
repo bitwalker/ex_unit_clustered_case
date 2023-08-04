@@ -118,6 +118,8 @@ defmodule ExUnit.ClusteredCase do
   - `config: Keyword.t`, configuration overrides to apply to all nodes in the cluster
   - `boot_timeout: integer`, the amount of time to allow for nodes to boot, in milliseconds
   - `init_timeout: integer`, the amount of time to allow for nodes to be initialized, in milliseconds
+  - `:hidden_connect`, boolean indicating if the node should be connected as hidden node.
+    Default value is `true`.
 
   ## Examples
 

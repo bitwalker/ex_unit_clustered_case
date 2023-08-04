@@ -1,6 +1,7 @@
 defmodule ExUnit.ClusteredCase.Node.Agent do
   @moduledoc false
 
+  alias ExUnit.ClusteredCase.Utils, as: ClusterUtils
   alias ExUnit.ClusteredCase.Node.Manager
 
   @doc """
@@ -21,7 +22,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     Process.flag(:trap_exit, true)
     Process.register(self(), name_of())
 
-    case :net_kernel.hidden_connect_node(manager_node) do
+    case exec_node_connect(manager_node) do
       true ->
         :ok
 
@@ -96,6 +97,18 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     :erlang.halt()
   end
 
+  defp exec_node_connect(manager_node) do
+    hidden_connect =
+      ClusterUtils.hidden_connect_key()
+      |> System.get_env("true")
+      |> String.to_atom()
+
+    case hidden_connect do
+      false -> :net_kernel.connect_node(manager_node)
+      _ -> :net_kernel.hidden_connect_node(manager_node)
+    end
+  end
+
   defp loop(manager, manager_node) do
     receive do
       {:terminate, opts} ->
@@ -126,7 +139,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
       {from, :disconnect, node} when is_atom(node) ->
         disconnect_nodes(from, [node])
-        
+
       {from, :spawn_fun, fun, fun_opts} ->
         reply = spawn_fun(fun, fun_opts)
         send(from, {Node.self(), self(), reply})
@@ -166,7 +179,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
       end
     end
   end
-  
+
   defp spawn_fun(fun, opts) when is_function(fun) do
     collect? = Keyword.get(opts, :collect, true)
     parent = self()

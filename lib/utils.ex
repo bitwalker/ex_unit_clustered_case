@@ -72,4 +72,8 @@ defmodule ExUnit.ClusteredCase.Utils do
     basename = <<"ex_unit_clustered_node_", suffix::binary>>
     nodename(basename)
   end
+
+  def hidden_connect_key() do
+    "HIDDEN_CONNECT"
+  end
 end
