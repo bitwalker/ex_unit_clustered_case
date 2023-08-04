@@ -24,6 +24,7 @@ defmodule ExUnit.ClusteredCase.Cluster do
           | {:post_start_functions, [callback]}
           | {:stdout, atom | pid}
           | {:capture_log, boolean}
+          | {:hidden_connect, boolean}
 
   defstruct [
     :parent,

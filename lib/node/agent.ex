@@ -1,6 +1,8 @@
 defmodule ExUnit.ClusteredCase.Node.Agent do
   @moduledoc false
 
+  alias Mix.Utils
+  alias ExUnit.ClusteredCase.Utils, as: ClusterUtils
   alias ExUnit.ClusteredCase.Node.Manager
 
   @doc """
@@ -21,7 +23,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
     Process.flag(:trap_exit, true)
     Process.register(self(), name_of())
 
-    case :net_kernel.hidden_connect_node(manager_node) do
+    case exec_node_connect(manager_node) do
       true ->
         :ok
 
@@ -94,6 +96,18 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
       send({manager_name, manager_node}, {Node.self(), self(), {:init_failed, msg}})
   after
     :erlang.halt()
+  end
+
+  defp exec_node_connect(manager_node) do
+    hidden_connect =
+      ClusterUtils.hidden_connect_key()
+      |> System.get_env()
+      |> String.to_atom()
+
+    case hidden_connect do
+      false -> :net_kernel.connect_node(manager_node)
+      _ -> :net_kernel.hidden_connect_node(manager_node)
+    end
   end
 
   defp loop(manager, manager_node) do
