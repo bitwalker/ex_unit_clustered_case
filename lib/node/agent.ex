@@ -1,7 +1,6 @@
 defmodule ExUnit.ClusteredCase.Node.Agent do
   @moduledoc false
 
-  alias Mix.Utils
   alias ExUnit.ClusteredCase.Utils, as: ClusterUtils
   alias ExUnit.ClusteredCase.Node.Manager
 
@@ -140,7 +139,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
 
       {from, :disconnect, node} when is_atom(node) ->
         disconnect_nodes(from, [node])
-        
+
       {from, :spawn_fun, fun, fun_opts} ->
         reply = spawn_fun(fun, fun_opts)
         send(from, {Node.self(), self(), reply})
@@ -180,7 +179,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
       end
     end
   end
-  
+
   defp spawn_fun(fun, opts) when is_function(fun) do
     collect? = Keyword.get(opts, :collect, true)
     parent = self()
