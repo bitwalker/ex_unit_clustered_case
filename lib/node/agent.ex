@@ -100,7 +100,7 @@ defmodule ExUnit.ClusteredCase.Node.Agent do
   defp exec_node_connect(manager_node) do
     hidden_connect =
       ClusterUtils.hidden_connect_key()
-      |> System.get_env()
+      |> System.get_env("true")
       |> String.to_atom()
 
     case hidden_connect do
